@@ -1,0 +1,101 @@
+# --- Load the Remora component for SPI communication ---
+# The chip_type should match your processor (e.g., STM for STM32F4 on the Octopus).
+# SPI_clk_div sets the communication speed. Smaller value = faster speed (e.g., 4 or 8)
+# The value is a divisor of the peripheral clock, check Remora documentation for safe values.
+loadrt remora chip_type=STM SPI_clk_div=8
+
+# --- Load the LinuxCNC motion component ---
+# This is always needed for machine movement
+loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD 
+loadrt hostmot2 
+
+# --- Add Kinematics and Motion to the Hal layer ---
+addf motion-command-handler remora.remora-servo-thread
+addf motion-controller remora.remora-servo-thread
+
+# --- Link the Remora thread to the LinuxCNC servo thread ---
+addf remora.remora-calc-results remora.remora-servo-thread
+addf remora.remora-send-outputs remora.remora-servo-thread
+addf remora.remora-read-inputs remora.remora-servo-thread
+
+# --- Link the standard I/O (buttons, switches, spindle) functions ---
+# This links the LinuxCNC base thread (usually for slower I/O) to the remora update function.
+# This may not be strictly needed if all I/O is handled in the servo thread, but is good practice.
+addf remora.remora-update-i-o remora.remora-base-thread
+
+# ----------------------------------------------------
+# --- JOINT/AXIS CONFIGURATION (Steps/Direction) ---
+# ----------------------------------------------------
+
+# --- JOINT 0 (X Axis) ---
+# The remora.stepgen.0.step is the pin that Remora sends the step pulse out on.
+# In Remora, these pins are numbered starting from 0 (0=X, 1=Y, 2=Z, etc.)
+
+net X-step joint.0.step-out => remora.stepgen.0.step
+net X-dir joint.0.dir-out => remora.stepgen.0.dir
+net X-enable joint.0.enable-out => remora.stepgen.0.enable
+
+# --- JOINT 1 (Y Axis) ---
+net Y-step joint.1.step-out => remora.stepgen.1.step
+net Y-dir joint.1.dir-out => remora.stepgen.1.dir
+net Y-enable joint.1.enable-out => remora.stepgen.1.enable
+
+# --- JOINT 2 (Z Axis) ---
+net Z-step joint.2.step-out => remora.stepgen.2.step
+net Z-dir joint.2.dir-out => remora.stepgen.2.dir
+net Z-enable joint.2.enable-out => remora.stepgen.2.enable
+
+# ----------------------------------------------------
+# --- INPUTS (Limit/Home Switches) ---
+# ----------------------------------------------------
+
+# Assume active low switches (common for N.O. inductive sensors or mechanical switches)
+# The remora.io.pin-<Pin_Number_X>-in pins are the HAL representations of your physical Octopus inputs.
+
+# --- X Axis Home/Limit ---
+# Net X-Limit ties the physical input to the joint limit pin
+net X-Limit remora.io.pin-<Pin_Number_X_Limit>-in => joint.0.limit-in 
+# Net X-Home ties the same input to the joint home pin (if separate switches aren't used)
+net X-Home remora.io.pin-<Pin_Number_X_Limit>-in => joint.0.home-in 
+
+# --- Y Axis Home/Limit ---
+net Y-Limit remora.io.pin-<Pin_Number_Y_Limit>-in => joint.1.limit-in
+net Y-Home remora.io.pin-<Pin_Number_Y_Limit>-in => joint.1.home-in
+
+# --- Z Axis Home/Limit ---
+net Z-Limit remora.io.pin-<Pin_Number_Z_Limit>-in => joint.2.limit-in
+net Z-Home remora.io.pin-<Pin_Number_Z_Limit>-in => joint.2.home-in
+
+# --- E-Stop Loop (Required) ---
+# If you have a physical E-stop button wired to a Remora input pin:
+net E-Stop-In remora.io.pin-<Pin_Number_EStop>-in 
+# Connect the physical E-Stop input to the machine E-Stop input
+net E-Stop-Net => halui.machine.estop.in
+
+# ----------------------------------------------------
+# --- OUTPUTS (Spindle/Coolant) ---
+# ----------------------------------------------------
+
+# --- Spindle On/Off (M3/M5) ---
+# Assumes a simple ON/OFF relay output on the Octopus
+net spindle-on-out motion.spindle-on => remora.io.pin-<Pin_Number_Spindle_On>-out
+
+# --- Spindle Speed (PWM) ---
+# Connect the LinuxCNC requested speed to the Remora PWM pin (for VFD control, etc.)
+# If using simple ON/OFF for the spindle, you can skip the PWM setup.
+# net spindle-speed motion.spindle-speed-out => remora.pwm.0.value
+# net spindle-enable motion.spindle-on => remora.pwm.0.enable
+
+# --- Coolant/Mist/Flood (M7/M8/M9) ---
+net mist-on halui.flood.is-on => remora.io.pin-<Pin_Number_Mist>-out
+net flood-on halui.mist.is-on => remora.io.pin-<Pin_Number_Flood>-out
+
+# ----------------------------------------------------
+# --- ESTOP/MACHINE ENABLE SEQUENCE ---
+# ----------------------------------------------------
+
+# This sequence manages the flow from machine E-stop to motor enable.
+# The remora enable output connects to the driver enable pins (if wired).
+# If your driver enable pins are wired to a single output on the Octopus, use that pin.
+net machine-is-enabled halui.machine.is-on => motion.enable
+net motion-has-enabled motion.has-enabled => remora.io.pin-<Pin_Number_Driver_Enable>-out
