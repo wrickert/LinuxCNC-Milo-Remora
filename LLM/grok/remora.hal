@@ -1,0 +1,28 @@
+# remora.hal - Load Remora firmware over SPI on Pi5
+
+loadrt remora
+addf remora.update base-thread
+addf remora.servo-update servo-thread
+
+# SPI connection - Raspberry Pi 5 uses SPI0 CE0 (GPIO8)
+setp remora.spi-cs-pin 8
+setp remora.spi-clock-hz 10000000   # 10 MHz works reliably on Pi5
+setp remora.reset-pin 25            # GPIO25 for Remora reset (optional, can be 0 if not wired)
+
+# Joint to stepgen mapping (Remora exports stepgen.0 → joint0, etc.)
+net x-pos-cmd    joint.0.motor-pos-cmd  => remora.0.stepgen.00.position-cmd
+net x-pos-fb     remora.0.stepgen.00.position-fb => joint.0.motor-pos-fb
+net x-enable     joint.0.amp-enable-out   => remora.0.stepgen.00.enable
+
+net y-pos-cmd    joint.1.motor-pos-cmd  => remora.0.stepgen.01.position-cmd
+net y-pos-fb     remora.0.stepgen.01.position-fb => joint.1.motor-pos-fb
+net y-enable     joint.1.amp-enable-out   => remora.0.stepgen.01.enable
+
+net z-pos-cmd    joint.2.motor-pos-cmd  => remora.0.stepgen.02.position-cmd
+net z-pos-fb     remora.0.stepgen.02.position-fb => joint.2.motor-pos-fb
+net z-enable     joint.2.amp-enable-out   => remora.0.stepgen.02.enable
+
+# Spindle PWM on Octopus PA8 (usually PWM0 on Remora)
+net spindle-on   spindle.0.on => remora.0.pwmgen.00.enable
+net spindle-speed spindle.0.speed-cmd-rps => remora.0.pwmgen.00.value
+setp remora.0.pwmgen.00.pwm-frequency 2000   # 2 kHz typical for VFD or RC PWM

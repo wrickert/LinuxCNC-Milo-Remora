@@ -1,0 +1,25 @@
+# custom.hal - Milo-specific I/O
+
+# E-Stop loop (normally closed loop)
+net estop-loop iocontrol.0.user-request-estop remora.0.input.00
+net estop-out  iocontrol.0.emc-enable-in <= remora.0.output.00
+
+# Home switches (Milo uses normally-closed switches on X-min, Y-min, Z-max)
+net x-home joint.0.home-sw-in <= remora.0.input.01
+net y-home joint.1.home-sw-in <= remora.0.input.02
+net z-home joint.2.home-sw-in <= remora.0.input.03
+
+# Limit switches (shared with home on Milo)
+net x-neg-limit joint.0.neg-lim-sw-in <= remora.0.input.01
+net x-pos-limit joint.0.pos-lim-sw-in <= remora.0.input.01   # not used
+net y-neg-limit joint.1.neg-lim-sw-in <= remora.0.input.02
+net y-pos-limit joint.1.pos-lim-sw-in <= remora.0.input.02
+net z-neg-limit joint.2.neg-lim-sw-in <= remora.0.input.03
+net z-pos-limit joint.2.pos-lim-sw-in <= remora.0.input.03
+
+# Probe input (usually on Octopus PC6 → input 07 on Remora)
+net probe-in motion.probe-input <= remora.0.input.07
+
+# Spindle direction & enable (if using relay outputs)
+net spindle-cw   spindle.0.forward  => remora.0.output.01
+net spindle-ccw  spindle.0.reverse => remora.0.output.02

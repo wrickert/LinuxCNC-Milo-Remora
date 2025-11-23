@@ -1,0 +1,2 @@
+# shutdown.hal - graceful shutdown on power-off
+net power-off motion.motion-enabled => inverter.0.in

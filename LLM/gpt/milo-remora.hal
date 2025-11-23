@@ -1,0 +1,90 @@
+# Milo V1.5 + Remora SPI + Octopus 1.1
+
+# --- Core motion components -----------------------------------
+loadrt [KINS]KINEMATICS
+loadrt [EMCMOT]EMCMOT \
+    base_period_nsec=[EMCMOT]BASE_PERIOD \
+    servo_period_nsec=[EMCMOT]SERVO_PERIOD \
+    num_joints=[KINS]JOINTS
+
+# Remora SPI driver (STM32, Octopus)
+# SPI_num / CS_num must match your wiring (Pi5 → Octopus)
+# SPI_freq is in Hz, 2 MHz is conservative.
+loadrt remora-spi SPI_num=0 CS_num=0 SPI_freq=2000000 ctrl_type=p,p,p
+
+# --- E-stop loop and SPI comms health -------------------------
+net user-enable-out     <= iocontrol.0.user-enable-out    => remora.SPI-enable
+net user-request-enable <= iocontrol.0.user-request-enable => remora.SPI-reset
+net remora-status       <= remora.SPI-status              => iocontrol.0.emc-enable-in
+
+# --- Add functions to servo thread ----------------------------
+addf remora.read             servo-thread
+addf motion-command-handler  servo-thread
+addf motion-controller       servo-thread
+addf remora.update-freq      servo-thread
+addf remora.write            servo-thread
+
+# ==============================================================
+# JOINT → REMORA MAPPING
+# These link LinuxCNC joints to the stepgens defined in your
+# Remora config.txt on the Octopus.
+# ==============================================================
+
+# Joint 0 (X)
+setp remora.joint.0.scale      [JOINT_0]SCALE
+setp remora.joint.0.maxaccel   [JOINT_0]STEPGEN_MAXACCEL
+
+net x-pos-cmd  <= joint.0.motor-pos-cmd  => remora.joint.0.pos-cmd
+net x-pos-fb   <= remora.joint.0.pos-fb  => joint.0.motor-pos-fb
+net x-enable   <= joint.0.amp-enable-out => remora.joint.0.enable
+
+# Joint 1 (Y)
+setp remora.joint.1.scale      [JOINT_1]SCALE
+setp remora.joint.1.maxaccel   [JOINT_1]STEPGEN_MAXACCEL
+
+net y-pos-cmd  <= joint.1.motor-pos-cmd  => remora.joint.1.pos-cmd
+net y-pos-fb   <= remora.joint.1.pos-fb  => joint.1.motor-pos-fb
+net y-enable   <= joint.1.amp-enable-out => remora.joint.1.enable
+
+# Joint 2 (Z)
+setp remora.joint.2.scale      [JOINT_2]SCALE
+setp remora.joint.2.maxaccel   [JOINT_2]STEPGEN_MAXACCEL
+
+net z-pos-cmd  <= joint.2.motor-pos-cmd  => remora.joint.2.pos-cmd
+net z-pos-fb   <= remora.joint.2.pos-fb  => joint.2.motor-pos-fb
+net z-enable   <= joint.2.amp-enable-out => remora.joint.2.enable
+
+# ==============================================================
+# Inputs: home/limit switches (wired in Remora config.txt)
+# Adjust input indices to match your JSON config.
+# ==============================================================
+
+# Example: X/Y/Z min switches on remora.input.00/01/02
+# Uncomment and change as needed once wiring is known.
+
+# net x-home-sw   remora.input.00 => joint.0.home-sw-in
+# net y-home-sw   remora.input.01 => joint.1.home-sw-in
+# net z-home-sw   remora.input.02 => joint.2.home-sw-in
+
+# You can also net probe, door, estop, etc. here.
+
+# ==============================================================
+# Spindle control example (PWM + enable)
+# This MUST match the PWM / digital outputs defined in your
+# Remora config.txt on the Octopus.
+# ==============================================================
+
+# net spindle-on        motion.spindle-on        => remora.output.00
+# net spindle-fwd       motion.spindle-forward   => remora.output.01
+# net spindle-speed     motion.spindle-speed-out => remora.pwm.00.value
+
+# Add coolant, VFD fault, etc. as needed.
+
+# ==============================================================
+# Misc
+# ==============================================================
+
+# Make life easier: one signal to enable all joints if you like
+net all-enable x-enable y-enable z-enable
+
+
