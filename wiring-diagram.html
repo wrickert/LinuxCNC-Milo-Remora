@@ -1,0 +1,467 @@
+<title>Milo Control Wiring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#EEF1F4;
+    --surface:#FFFFFF;
+    --surface-2:#E3E9EE;
+    --ink:#11171C;
+    --ink-2:#57646F;
+    --ink-3:#7E8B96;
+    --line:#C2CCD5;
+    --line-soft:#D8E0E7;
+    --mains:#A9542A;
+    --v24:#28649F;
+    --v5:#B33A2E;
+    --sig:#12776A;
+    --alert-bg:#F8EDE4;
+    --alert-line:#A9542A;
+    --note-bg:#E4EDEC;
+    --note-line:#12776A;
+    --shadow:0 1px 2px rgba(17,23,28,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10151A;
+      --surface:#181F26;
+      --surface-2:#212B34;
+      --ink:#E4EBF1;
+      --ink-2:#9AA8B4;
+      --ink-3:#78868F;
+      --line:#33404B;
+      --line-soft:#28323B;
+      --mains:#E09562;
+      --v24:#6DA9E2;
+      --v5:#E87C6E;
+      --sig:#4FC3AE;
+      --alert-bg:#2A1F17;
+      --alert-line:#E09562;
+      --note-bg:#152622;
+      --note-line:#4FC3AE;
+      --shadow:0 1px 2px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10151A;
+    --surface:#181F26;
+    --surface-2:#212B34;
+    --ink:#E4EBF1;
+    --ink-2:#9AA8B4;
+    --ink-3:#78868F;
+    --line:#33404B;
+    --line-soft:#28323B;
+    --mains:#E09562;
+    --v24:#6DA9E2;
+    --v5:#E87C6E;
+    --sig:#4FC3AE;
+    --alert-bg:#2A1F17;
+    --alert-line:#E09562;
+    --note-bg:#152622;
+    --note-line:#4FC3AE;
+    --shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:15px;
+    line-height:1.62;
+    margin:0;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:34px}
+
+  /* ---- title block: engineering-drawing convention ---- */
+  .titleblock{
+    border:1.5px solid var(--ink);
+    background:var(--surface);
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+  }
+  .titleblock .tb-main{
+    grid-column:1/-1;
+    padding:20px 22px 18px;
+    border-bottom:1.5px solid var(--ink);
+  }
+  .titleblock h1{
+    font-family:Archivo,system-ui,sans-serif;
+    font-weight:700;
+    font-size:30px;
+    line-height:1.1;
+    letter-spacing:-.015em;
+    margin:0 0 6px;
+    text-wrap:balance;
+  }
+  .titleblock .sub{color:var(--ink-2);font-size:14px;margin:0;max-width:62ch}
+  .tb-cell{padding:11px 14px;border-right:1px solid var(--line)}
+  .tb-cell:last-child{border-right:0}
+  .tb-cell .k{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);display:block;margin-bottom:2px;
+  }
+  .tb-cell .v{font-size:13.5px;font-weight:500}
+  @media (max-width:640px){
+    .titleblock{grid-template-columns:repeat(2,1fr)}
+    .tb-cell:nth-child(odd){border-right:1px solid var(--line)}
+    .tb-cell:nth-child(even){border-right:0}
+    .tb-cell:nth-child(2),.tb-cell:nth-child(3){border-bottom:1px solid var(--line)}
+    .titleblock h1{font-size:25px}
+  }
+
+  section{display:flex;flex-direction:column;gap:14px}
+  h2{
+    font-family:Archivo,system-ui,sans-serif;
+    font-weight:600;font-size:20px;letter-spacing:-.01em;
+    margin:0;padding-bottom:8px;border-bottom:1px solid var(--line);
+    text-wrap:balance;
+  }
+  h3{
+    font-family:Archivo,system-ui,sans-serif;
+    font-weight:600;font-size:15px;margin:6px 0 0;
+  }
+  p{margin:0;max-width:66ch}
+  ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:66ch}
+  strong{font-weight:600}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9em}
+  code{background:var(--surface-2);padding:1px 5px;border-radius:2px}
+
+  /* ---- legend ---- */
+  .legend{
+    display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;
+    padding:11px 14px;background:var(--surface);border:1px solid var(--line);
+  }
+  .legend .li{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
+  .legend .sw{width:22px;height:3px;border-radius:2px;flex:none}
+  .legend .lbl{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.03em}
+
+  /* ---- figures ---- */
+  figure{margin:0;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+  .figscroll{overflow-x:auto;padding:18px 16px 6px}
+  figure svg{display:block;width:100%;min-width:620px;height:auto}
+  figcaption{
+    padding:11px 16px 13px;border-top:1px solid var(--line-soft);
+    color:var(--ink-2);font-size:13px;max-width:none;
+  }
+
+  /* svg wire classes */
+  .w-mains{stroke:var(--mains)}
+  .w-24{stroke:var(--v24)}
+  .w-5{stroke:var(--v5)}
+  .w-sig{stroke:var(--sig)}
+  .wire{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .mk-mains{fill:var(--mains)}
+  .mk-24{fill:var(--v24)}
+  .mk-5{fill:var(--v5)}
+  .mk-sig{fill:var(--sig)}
+  .bx{fill:var(--surface-2);stroke:var(--ink-2);stroke-width:1.25}
+  .zone{fill:none;stroke:var(--line);stroke-width:1.25;stroke-dasharray:5 4}
+  .t{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:13px;font-weight:500;fill:var(--ink)}
+  .ts{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;fill:var(--ink-2)}
+  .tz{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.1em;fill:var(--ink-3)}
+  .tw{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;font-weight:500}
+  .tw-mains{fill:var(--mains)}
+  .tw-24{fill:var(--v24)}
+  .tw-5{fill:var(--v5)}
+  .tw-sig{fill:var(--sig)}
+
+  /* ---- tables ---- */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);background:var(--surface)}
+  table{border-collapse:collapse;width:100%;min-width:460px;font-size:13.5px}
+  th{
+    text-align:left;font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:500;
+    padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  td{padding:8px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  td.m{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .unk{color:var(--ink-3);font-style:italic}
+
+  /* ---- callouts ---- */
+  .callout{
+    background:var(--alert-bg);border-left:3px solid var(--alert-line);
+    padding:13px 16px;display:flex;flex-direction:column;gap:7px;
+  }
+  .callout.note{background:var(--note-bg);border-left-color:var(--note-line)}
+  .callout .ch{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;
+    font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-2);
+  }
+  .callout p{max-width:64ch}
+
+  /* ---- open items ---- */
+  .open{background:var(--surface);border:1px solid var(--line)}
+  .open .row{display:flex;gap:14px;padding:11px 16px;border-bottom:1px solid var(--line-soft)}
+  .open .row:last-child{border-bottom:0}
+  .open .n{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+    color:var(--ink-3);padding-top:2px;flex:none;width:22px;
+  }
+  .open .b{display:flex;flex-direction:column;gap:2px}
+  .open .q{font-weight:600;font-size:14px}
+  .open .a{color:var(--ink-2);font-size:13px;max-width:60ch}
+  .open .q{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .st{
+    font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9.5px;
+    letter-spacing:.08em;text-transform:uppercase;font-weight:500;
+    padding:1px 6px;border:1px solid currentColor;border-radius:2px;flex:none;
+  }
+  .st-open{color:var(--mains)}
+  .st-done{color:var(--sig)}
+
+  footer{color:var(--ink-3);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="titleblock">
+    <div class="tb-main">
+      <h1>Milo Control Wiring</h1>
+      <p class="sub">Interconnect plan for the LinuxCNC conversion — power domains, the SPI link, the spindle chain, and the e&#8209;stop. The Pi&#8209;to&#8209;Octopus SPI link is proven working. Signal paths are settled; every pin number still to be read off the hardware is marked.</p>
+    </div>
+    <div class="tb-cell"><span class="k">Machine</span><span class="v">Milo v1.5</span></div>
+    <div class="tb-cell"><span class="k">Controller</span><span class="v">BTT Octopus v1.1</span></div>
+    <div class="tb-cell"><span class="k">Host</span><span class="v">Raspberry Pi 5</span></div>
+    <div class="tb-cell"><span class="k">Status</span><span class="v">SPI link live · panel not built</span></div>
+  </header>
+
+  <div class="legend">
+    <div class="li"><span class="sw" style="background:var(--mains)"></span><span class="lbl">MAINS AC</span></div>
+    <div class="li"><span class="sw" style="background:var(--v24)"></span><span class="lbl">24 V DC</span></div>
+    <div class="li"><span class="sw" style="background:var(--v5)"></span><span class="lbl">5 V DC</span></div>
+    <div class="li"><span class="sw" style="background:var(--sig)"></span><span class="lbl">SIGNAL</span></div>
+  </div>
+
+  <section>
+    <h2>Two power domains, joined only by ground</h2>
+    <p>The single decision that shapes everything else: the Pi runs on its own supply, off unswitched mains. The e&#8209;stop drops the machine and leaves the computer alive.</p>
+
+    <figure>
+      <div class="figscroll">
+        <svg viewBox="0 0 900 400" role="img" aria-label="Power architecture: mains feeds two independent domains. An unswitched branch powers a 5 volt 5 amp USB-C PD supply and the Raspberry Pi 5, which stays powered. A switched branch runs through the e-stop contactor to a 24 volt PSU feeding the BTT Octopus, and to the VFD feeding the spindle; that whole domain drops on e-stop. The Pi and Octopus are joined only by SPI and ground, with no 5 volt link.">
+          <defs>
+            <marker id="a-mains" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-mains" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="a-24" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-24" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="a-5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-5" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="a-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-sig" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <rect class="zone" x="200" y="8" width="680" height="112" rx="4"/>
+          <text class="tz" x="208" y="26">STAYS POWERED</text>
+          <rect class="zone" x="200" y="136" width="680" height="246" rx="4"/>
+          <text class="tz" x="208" y="154">DROPS ON E-STOP</text>
+
+          <rect class="bx" x="24" y="204" width="130" height="68" rx="3"/>
+          <text class="t" x="89" y="234" text-anchor="middle">Mains AC</text>
+          <text class="ts" x="89" y="252" text-anchor="middle">house circuit</text>
+
+          <rect class="bx" x="230" y="44" width="170" height="64" rx="3"/>
+          <text class="t" x="315" y="72" text-anchor="middle">USB-C PD supply</text>
+          <text class="ts" x="315" y="90" text-anchor="middle">5 V · 5 A</text>
+
+          <rect class="bx" x="660" y="44" width="200" height="64" rx="3"/>
+          <text class="t" x="760" y="72" text-anchor="middle">Raspberry Pi 5</text>
+          <text class="ts" x="760" y="90" text-anchor="middle">+ NVMe HAT · LinuxCNC</text>
+
+          <rect class="bx" x="230" y="200" width="170" height="76" rx="3"/>
+          <text class="t" x="315" y="230" text-anchor="middle">E-stop contactor</text>
+          <text class="ts" x="315" y="248" text-anchor="middle">latching mushroom</text>
+          <text class="ts" x="315" y="264" text-anchor="middle">+ start / reset</text>
+
+          <rect class="bx" x="460" y="170" width="150" height="64" rx="3"/>
+          <text class="t" x="535" y="198" text-anchor="middle">24 V PSU</text>
+          <text class="ts" x="535" y="216" text-anchor="middle">motors + logic</text>
+
+          <rect class="bx" x="660" y="170" width="200" height="64" rx="3"/>
+          <text class="t" x="760" y="198" text-anchor="middle">BTT Octopus v1.1</text>
+          <text class="ts" x="760" y="216" text-anchor="middle">Remora firmware</text>
+
+          <rect class="bx" x="460" y="300" width="150" height="64" rx="3"/>
+          <text class="t" x="535" y="328" text-anchor="middle">VFD</text>
+          <text class="ts" x="535" y="346" text-anchor="middle">110 V in</text>
+
+          <rect class="bx" x="660" y="300" width="200" height="64" rx="3"/>
+          <text class="t" x="760" y="328" text-anchor="middle">Spindle</text>
+          <text class="ts" x="760" y="346" text-anchor="middle">24 000 rpm max</text>
+
+          <path class="wire w-mains" d="M89,204 L89,76 L222,76" marker-end="url(#a-mains)"/>
+          <text class="tw tw-mains" x="97" y="150">unswitched</text>
+          <path class="wire w-mains" d="M154,238 L222,238" marker-end="url(#a-mains)"/>
+          <text class="tw tw-mains" x="188" y="230" text-anchor="middle">switched</text>
+
+          <path class="wire w-mains" d="M400,222 L430,222 L430,202 L452,202" marker-end="url(#a-mains)"/>
+          <path class="wire w-mains" d="M400,254 L430,254 L430,332 L452,332" marker-end="url(#a-mains)"/>
+
+          <path class="wire w-24" d="M610,202 L652,202" marker-end="url(#a-24)"/>
+          <text class="tw tw-24" x="631" y="194" text-anchor="middle">24 V</text>
+
+          <path class="wire w-mains" d="M610,332 L652,332" marker-end="url(#a-mains)"/>
+          <text class="tw tw-mains" x="631" y="324" text-anchor="middle">3-phase</text>
+
+          <path class="wire w-5" d="M400,76 L652,76" marker-end="url(#a-5)"/>
+          <text class="tw tw-5" x="526" y="68" text-anchor="middle">5 V · 5 A</text>
+
+          <path class="wire w-sig" d="M690,108 L690,162" marker-end="url(#a-sig)" stroke-dasharray="6 4"/>
+          <text class="tw tw-sig" x="678" y="130" text-anchor="end">SPI + GND only</text>
+          <text class="tw tw-sig" x="678" y="148" text-anchor="end">no 5 V between them</text>
+        </svg>
+      </div>
+      <figcaption>The e&#8209;stop contactor sits in the mains path, so it drops the 24&nbsp;V rail and the VFD together. The Pi's supply is upstream of it and never sees the break — LinuxCNC stays running, keeps its position, and shuts down cleanly on your terms.</figcaption>
+    </figure>
+
+    <p>The Octopus <em>can</em> power a Pi — it has a dedicated header (J26) and an 8&nbsp;A 5&nbsp;V buck, so this isn't a capacity problem. It's a behaviour problem. Hang the Pi off that rail and every e&#8209;stop, every power-down and every fault kills the computer mid-cut: lost machine position, no controlled recovery, and an unclean NVMe shutdown every single time.</p>
+
+    <div class="callout note">
+      <span class="ch">Wiring consequence</span>
+      <p>With two supplies, connect <strong>ground and the SPI signals only</strong>. Do not bridge 5&nbsp;V between the Pi and the Octopus — two supplies fighting over one rail is how you cook a regulator. Bond the grounds properly; SPI needs a solid reference, not an incidental one.</p>
+    </div>
+    <p>Secondary, but real: a Pi&nbsp;5 can't negotiate USB&#8209;PD through the GPIO header, so it boots into reduced-power mode and caps total USB current at 600&nbsp;mA — awkward when the NVMe HAT is already drawing its own 2–5&nbsp;W.</p>
+  </section>
+
+  <section>
+    <h2>Signal chain</h2>
+    <p>Step generation happens on the Octopus, not the Pi. The Pi runs the 1&nbsp;kHz servo thread and one SPI transfer per cycle — which is why a Pi is the right host here and an x86 box isn't.</p>
+
+    <figure>
+      <div class="figscroll">
+        <svg viewBox="0 0 1020 340" role="img" aria-label="Signal chain: the Raspberry Pi 5 talks to the BTT Octopus over SPI0. Three normally-closed endstop switches feed into the Octopus. The Octopus sends PWM to the Milo expansion board, which outputs 0 to 10 volts to the VFD, and drives an enable relay that closes the VFD's STF run input.">
+          <defs>
+            <marker id="b-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-sig" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <rect class="bx" x="20" y="124" width="180" height="64" rx="3"/>
+          <text class="t" x="110" y="152" text-anchor="middle">Raspberry Pi 5</text>
+          <text class="ts" x="110" y="170" text-anchor="middle">LinuxCNC + Remora</text>
+
+          <rect class="bx" x="20" y="250" width="180" height="64" rx="3"/>
+          <text class="t" x="110" y="278" text-anchor="middle">Endstops</text>
+          <text class="ts" x="110" y="296" text-anchor="middle">X min · Y max · Z max</text>
+
+          <rect class="bx" x="270" y="110" width="190" height="190" rx="3"/>
+          <text class="t" x="365" y="192" text-anchor="middle">BTT Octopus v1.1</text>
+          <text class="ts" x="365" y="210" text-anchor="middle">stepgen · IO · PWM</text>
+
+          <rect class="bx" x="560" y="52" width="180" height="72" rx="3"/>
+          <text class="t" x="650" y="82" text-anchor="middle">Expansion board</text>
+          <text class="ts" x="650" y="100" text-anchor="middle">PWM &#8594; analog</text>
+
+          <rect class="bx" x="560" y="200" width="180" height="64" rx="3"/>
+          <text class="t" x="650" y="228" text-anchor="middle">Enable relay</text>
+          <text class="ts" x="650" y="246" text-anchor="middle">dry contact</text>
+
+          <rect class="bx" x="850" y="110" width="150" height="150" rx="3"/>
+          <text class="t" x="925" y="180" text-anchor="middle">VFD</text>
+          <text class="ts" x="925" y="198" text-anchor="middle">spindle drive</text>
+
+          <path class="wire w-sig" d="M200,156 L262,156" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="231" y="148" text-anchor="middle">SPI0</text>
+
+          <path class="wire w-sig" d="M200,282 L262,282" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="231" y="274" text-anchor="middle">3 &#215; NC</text>
+
+          <path class="wire w-sig" d="M460,155 L510,155 L510,88 L552,88" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="485" y="147" text-anchor="middle">PWM</text>
+
+          <path class="wire w-sig" d="M460,250 L510,250 L510,232 L552,232" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="485" y="242" text-anchor="middle">enable</text>
+
+          <path class="wire w-sig" d="M740,88 L795,88 L795,150 L842,150" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="767" y="80" text-anchor="middle">0&#8211;10 V</text>
+
+          <path class="wire w-sig" d="M740,232 L795,232 L795,220 L842,220" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="767" y="224" text-anchor="middle">STF</text>
+        </svg>
+      </div>
+      <figcaption>Two separate paths reach the VFD: an analog speed reference derived from the Octopus's PWM, and a dry relay contact that tells the drive to run. Speed and run are independent — the spindle does not turn because a voltage appeared.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Pi&nbsp;5 &#8594; Octopus, over SPI</h2>
+    <p>The Pi side is fixed and known. The Octopus side is not, and I won't invent it.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Pi 5 GPIO</th><th>Header pin</th><th>Octopus</th></tr></thead>
+        <tbody>
+          <tr><td class="m">MOSI</td><td class="m">GPIO 10</td><td class="m">19</td><td class="unk">in your Remora config</td></tr>
+          <tr><td class="m">MISO</td><td class="m">GPIO 9</td><td class="m">21</td><td class="unk">in your Remora config</td></tr>
+          <tr><td class="m">SCLK</td><td class="m">GPIO 11</td><td class="m">23</td><td class="unk">in your Remora config</td></tr>
+          <tr><td class="m">CE0</td><td class="m">GPIO 8</td><td class="m">24</td><td class="unk">in your Remora config</td></tr>
+          <tr><td class="m">GND</td><td class="m">&#8212;</td><td class="m">20</td><td class="m">any GND</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>This link is already up and passing traffic</strong> — so the Octopus side is settled in hardware, it just isn't written down yet. The authoritative record is the <span class="mono">config.json</span> on the Octopus: it names every STM32 pin Remora is using, and BTT's pinout maps those to physical headers. Capture it before it becomes something only the machine knows.</p>
+
+    <div class="callout">
+      <span class="ch">EMI &#8212; this one bites late</span>
+      <p>Keep the SPI ribbon physically away from the spindle motor cable, and keep it short. VFD switching noise coupling into SPI is a leading cause of Remora comms errors, and it presents as a <em>software</em> problem — random link drops, e&#8209;stops mid-program — which is exactly the wrong place to go looking. Use shielded cable for the spindle motor run and bond the shield at the <strong>VFD end only</strong>; grounding both ends invites a loop.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Spindle chain</h2>
+    <p>Your RepRapFirmware config already describes the interface: <code>M950 R0 C"PE_6+!PB_9" L24000 Q100</code> — a PWM output, an inverted enable line, 24&nbsp;000&nbsp;rpm full scale, 100&nbsp;Hz. Only the pin names die with the board swap; the rest carries over.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>From</th><th>Wire</th><th>VFD terminal</th><th>Function</th></tr></thead>
+        <tbody>
+          <tr><td>Relay NO contact</td><td class="m">orange</td><td class="m">STF</td><td>run forward</td></tr>
+          <tr><td>Relay common</td><td class="m">black / brown</td><td class="m">SD</td><td>digital common</td></tr>
+          <tr><td>Expansion 0&#8211;10&nbsp;V out</td><td class="m">&#8212;</td><td class="m">3</td><td>speed reference</td></tr>
+          <tr><td>Expansion analog GND</td><td class="m">&#8212;</td><td class="m">5</td><td>analog common</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="ch">Verify before you land these</span>
+      <p>Those designations come from the Milo documentation, which assumes a Mitsubishi&#8209;style terminal layout. <strong>VFD terminal numbering varies by manufacturer.</strong> On many drives one of the low-numbered analog terminals is a <em>10&nbsp;V reference output</em>, not an input — wiring your 0–10&nbsp;V signal into it shorts an output against a source. Check your drive's own manual and confirm which terminal is the analog <em>input</em> before connecting anything.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>E-stop chain</h2>
+    <p>The e&#8209;stop breaks the contactor coil circuit directly, in copper. LinuxCNC finding out about it is <em>awareness</em>, not the safety function — never make software the thing that stops the machine.</p>
+    <ul>
+      <li><strong>Hardware path:</strong> latching mushroom button, normally-closed, in series with the contactor coil. Press it and the coil drops out, taking the 24&nbsp;V PSU and the VFD's mains with it. Release-and-press-start to restore, so power never comes back on its own.</li>
+      <li><strong>Software path:</strong> an auxiliary NC contact on the contactor into an Octopus input, so LinuxCNC knows the machine is dead and refuses to run. This is for state, not for stopping.</li>
+      <li><strong>Free watchdog:</strong> Remora's <code>SPI-status</code> pin already drops LinuxCNC's enable if the link to the Octopus fails. It's wired in <code>milo.hal</code> — keep it.</li>
+    </ul>
+
+    <div class="callout">
+      <span class="ch">Worth designing for now</span>
+      <p>Killing mains to a VFD while the spindle is turning is hard on the drive, and the spindle then coasts for a long time with a tool in the work. The better arrangement uses the VFD's own safe-stop or external-fault input to brake the spindle, with the contactor as the backstop behind it. Decide this before you build the panel — it's a wiring change, not a settings change.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Before you cut a wire</h2>
+    <p>Seven things this drawing can&#39;t settle on its own &#8212; two now answered. Each of the rest has a definite answer sitting on the hardware or in a manual.</p>
+    <div class="open">
+      <div class="row"><span class="n">01</span><span class="b"><span class="q">Octopus SPI header pins <span class="st st-done">Resolved</span></span><span class="a">The link is up and passing traffic. Pull the pin names out of the Octopus&#39;s <span class="mono">config.json</span> and into the repo so this stops being knowledge that lives only on the machine.</span></span></div>
+      <div class="row"><span class="n">02</span><span class="b"><span class="q">Which output drives the expansion board&#39;s PWM in <span class="st st-open">Open</span></span><span class="a">On the Milo&#39;s original mainboard this was the BLTouch connector. The Octopus equivalent depends on what Remora exposes as a PWM channel &#8212; also in <span class="mono">config.json</span>.</span></span></div>
+      <div class="row"><span class="n">03</span><span class="b"><span class="q">Which output drives the enable relay <span class="st st-open">Open</span></span><span class="a">Needs to be an output Remora holds in a defined state at power-up. A spindle that starts on boot is the failure you don&#39;t get a second look at.</span></span></div>
+      <div class="row"><span class="n">04</span><span class="b"><span class="q">Endstop input numbers, and switch polarity <span class="st st-open">Open</span></span><span class="a">Three switches: X at min, Y at max, Z at max. Verify each in halshow with motors unpowered before homing anything.</span></span></div>
+      <div class="row"><span class="n">05</span><span class="b"><span class="q">Which driver modules are in the Octopus <span class="st st-open">Open</span></span><span class="a">RepRapFirmware asked for 1800&#8239;mA on X and Y, which is at the ceiling of a TMC2209&#39;s usable range and a non-issue on a TMC5160. Read the labels on the modules.</span></span></div>
+      <div class="row"><span class="n">06</span><span class="b"><span class="q">VFD make, model and terminal designations <span class="st st-open">Open</span></span><span class="a">See the spindle warning above. This is the one place where a guess can destroy hardware.</span></span></div>
+      <div class="row"><span class="n">07</span><span class="b"><span class="q">Mains voltage for the VFD <span class="st st-done">Resolved</span></span><span class="a">110&#8239;V single-phase in, three-phase out to the spindle. The mains side of the power diagram stands as drawn &#8212; one ordinary house circuit through the contactor, no 240&#8239;V feed to design around.</span></span></div>
+    </div>
+  </section>
+
+  <footer>
+    Motion parameters, homing order and axis limits live in <span class="mono">milo.ini</span> and <span class="mono">milo.hal</span>, derived from the machine's own RepRapFirmware config. This drawing covers the interconnect only.
+  </footer>
+
+</div>
