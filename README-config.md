@@ -48,41 +48,59 @@ Everything in the right-hand column is marked `TODO(pins)` in `milo.hal`.
 LinuxCNC handles cornering with acceleration limits plus the G64 path-blending
 tolerance instead. If corners feel harsh, tune `G64 P<n>` in your post, not the INI.
 
-## ⚠️ Microstepping: drop 32 → 16
+## ⚠️ Microstepping: drop 32 → 8 (not 16)
 
-RRF ran `M350 X32 Y32 Z32` with `M92 X800 Y800 Z1600`. Carried over literally, the
-required step rate at full rapid is:
+**Corrected.** An earlier version of this file said 16 microsteps and called it comfortable.
+That was wrong, because it assumed the step-rate ceiling was Remora's 40 kHz base frequency.
+It isn't. The stepgen needs **two base-thread cycles per pulse** (one high, one low), so the
+real ceiling is **half the base frequency — 20 kHz at the stock 40 kHz**.
 
-```
-X: 66.667 mm/s × 800 steps/mm = 53,333 steps/s
-Z: 33.333 mm/s × 1600 steps/mm = 53,333 steps/s
-```
+Required step rate at full rapid, from `M203 X4000 Y4000 Z2000`:
 
-**~53 kHz on two axes simultaneously.** Remora's stepgen runs at a configurable base
-frequency on the STM32, and the step rate cannot exceed it. A default in the 40 kHz
-region — common for Remora — would silently cap rapids at roughly 50 mm/s on X/Y and
-25 mm/s on Z, i.e. below the machine's real capability, and the symptom is "it just
-won't go as fast as it used to" rather than an error.
+| Microsteps | X/Y steps/mm | Z steps/mm | Step rate at rapid | vs 20 kHz ceiling |
+|---|---|---|---|---|
+| 32 (RRF's setting) | 800 | 1600 | 53.3 kHz | far over |
+| 16 | 400 | 800 | 26.7 kHz | **still over** |
+| **8** | **200** | **400** | **13.3 kHz** | **OK, 1/3 headroom** |
 
-Dropping to 16 microsteps halves it:
+`milo.ini` is written for **8 microsteps** — `SCALE` 200 / 200 / 400.
 
-```
-X: 66.667 mm/s × 400 steps/mm = 26,667 steps/s
-Z: 33.333 mm/s × 800 steps/mm = 26,667 steps/s
-```
+Exceeding the ceiling does not throw an error. Rapids just silently cap: at 16 microsteps X/Y
+would top out at 20000 / 400 = 50 mm/s, i.e. 3000 mm/min against the 4000 the machine is
+capable of. You would lose a quarter of your rapid speed and have nothing in a log to explain it.
 
-Comfortable, with headroom. 32 microsteps buys nothing real on a mill — the TMC's
-interpolation smooths the motor regardless of the step input rate, and resolution is
-already 0.0025 mm/step at 16. **`milo.ini` is written for 16 microsteps** (`SCALE`
-400/400/800); the 32-microstep values are in a comment beside them.
+**8 microsteps costs nothing here.** Resolution is 0.005 mm/step on X/Y and 0.0025 mm on Z, well
+inside what the machine can actually hold. And TMC drivers interpolate internally to 256
+microsteps regardless of the step input rate, so motor smoothness is unaffected — the
+interpolation is doing that work either way.
 
-Two things must agree with whatever is chosen:
+**The alternative, if you want 16:** recompile the Remora firmware with a higher `PRU_BASEFREQ`
+in `configuration.h` (the STM32F4 has headroom above 40 kHz), and pass the matching
+`PRU_base_freq` to `loadrt remora-spi`. **Both must agree** — the HAL parameter only tells the
+component what the firmware is doing; it does not configure the firmware. Not worth it unless
+something else forces 16.
+
+Three things must agree on whichever you pick:
 1. `SCALE` in `milo.ini`
-2. the microstep setting in the Octopus's Remora `config.json` (or the driver jumpers,
-   if the modules are running standalone)
+2. the microstep setting in the Octopus's Remora config (or the driver jumpers, in standalone mode)
+3. `PRU_base_freq` in `milo.hal` vs the firmware's compiled value
 
-Before trusting either, check Remora's actual base frequency in its config and confirm
-it clears the number above.
+## The Octopus's config file — get it into this repo
+
+Remora's pin map lives on the **Octopus's own microSD card**, in a file that must be named
+`config.txt` (JSON content, despite the extension) and must stay on the card in the board.
+Sample configs for this board are in the Remora repo under `Firmware/ConfigSamples/Octopus`.
+
+It is the source of truth for:
+- which STM32 pins carry SPI (the link is already proven working)
+- stepgen pin assignments and their order, which must match the joint numbers in `milo.hal`
+- PWM channels — answers "which output drives the expansion board"
+- digital IO numbering — answers "which input is which endstop"
+- the compiled base frequency, which settles the microstepping table above
+
+**It survived the Pi's NVMe being pulled**, because it was never on the Pi. Copy it into this
+repo. The whole reason the last attempt left nothing behind is that its configuration lived only
+on hardware.
 
 ## Still open
 

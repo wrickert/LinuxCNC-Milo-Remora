@@ -19,9 +19,14 @@ loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JO
 # --- Remora ------------------------------------------------------------------
 # The Remora component detects the Pi generation at runtime and loads either the
 # BCM2835 driver (Pi 4 and earlier) or rp1lib (Pi 5). Nothing to select here.
-# Start at a conservative SPI clock; raise it only once motion is proven, and
-# back it off again at the first sign of "SPI comms error" in dmesg.
-loadrt remora-spi SPI_freq=2000000
+# PRU_base_freq MUST match the base frequency compiled into the Remora firmware
+# on the Octopus (configuration.h). Stock is 40 kHz. Changing it here alone does
+# not change the firmware — it only tells the component what the firmware does.
+# SPI_clk_div: start conservative, raise only once motion is proven, and back it
+# off again at the first sign of "SPI comms error" in dmesg.
+# Verify both parameter names against your Remora version's docs before relying
+# on them — they have changed between releases.
+loadrt remora-spi SPI_clk_div=32 PRU_base_freq=40000
 
 addf remora.read            servo-thread
 addf motion-command-handler servo-thread
