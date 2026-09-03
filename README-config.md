@@ -115,6 +115,41 @@ on hardware.
   don't rewire.
 - **Whether the Octopus is even flashed with Remora yet.** Unknown as of 2026-09-03.
 
+## Rebuild path (Pi side, from scratch)
+
+The Pi's NVMe was pulled for another project, so the Pi side is a clean rebuild. The difference
+from the last attempt is that the configuration now lives in this repo instead of only on that
+drive.
+
+**Base image: [Expatria Flexi-Pi](https://github.com/Expatria-Technologies/Flexi-Pi/releases).**
+The Remora docs recommend it for Remora controllers. Separate Pi 4 and Pi 5 builds — take the
+**Pi 5** one; performance is notably better than Pi 4. Latest as of 2026-09-03 is the 2026-07-19
+release (LinuxCNC 2.10); Pi 5 support arrived with the 6.6-rt kernel migration and recent builds
+are on Debian Trixie.
+
+**It already includes the stock `remora-spi` component** (and `Remora-eth-3.0`), on an as-is
+basis. That removes the entire build step — no `halcompile`, no compiling rp1lib, no LinuxCNC dev
+branch. The image is built for Expatria's own board and ships a Remora *fork* for it, but the
+stock component is there for boards like the Octopus.
+
+Order of work:
+1. **Read the Octopus's microSD first** — copy `config.txt` into this repo before touching the Pi.
+2. Flash the Pi 5 Flexi-Pi image to the NVMe.
+3. Clone this repo, point LinuxCNC at `milo.ini`.
+4. Reconcile `milo.hal` against `config.txt`: joint order, PWM channel, input numbers,
+   `PRU_base_freq`.
+5. Work the "First power-on order" below.
+
+Two things to watch:
+- **The image's default UI is QtDragon_hd, not AXIS.** `milo.ini` sets `DISPLAY = axis`, which
+  works (AXIS ships with LinuxCNC) and is the simpler thing to bring up on. QtDragon_hd is worth
+  revisiting later — its probing and tool-table screens suit a mill with a toolsetter and a
+  touch probe.
+- **LinuxCNC 2.10 is newer than most Remora documentation assumes.** If anything in `milo.ini`
+  draws a deprecation warning it will most likely be the `[EMCIO]` section and the `iocontrol`
+  tool-change loopback, which is the part that has moved most between versions. Read the
+  startup output rather than assuming a clean load.
+
 ## First power-on order
 
 1. Motors unpowered. Start LinuxCNC, open halshow, press each endstop by hand and
