@@ -121,34 +121,67 @@ The Pi's NVMe was pulled for another project, so the Pi side is a clean rebuild.
 from the last attempt is that the configuration now lives in this repo instead of only on that
 drive.
 
-**Base image: [Expatria Flexi-Pi](https://github.com/Expatria-Technologies/Flexi-Pi/releases).**
-The Remora docs recommend it for Remora controllers. Separate Pi 4 and Pi 5 builds — take the
-**Pi 5** one; performance is notably better than Pi 4. Latest as of 2026-09-03 is the 2026-07-19
-release (LinuxCNC 2.10); Pi 5 support arrived with the 6.6-rt kernel migration and recent builds
-are on Debian Trixie.
+### The two routes, and why we picked one
 
-**It already includes the stock `remora-spi` component** (and `Remora-eth-3.0`), on an as-is
-basis. That removes the entire build step — no `halcompile`, no compiling rp1lib, no LinuxCNC dev
-branch. The image is built for Expatria's own board and ships a Remora *fork* for it, but the
-stock component is there for boards like the Octopus.
+Both get you a Pi 5 running LinuxCNC with Remora over SPI. They differ in exactly one axis: how
+current the OS is versus how much you have to build.
 
-Order of work:
-1. **Read the Octopus's microSD first** — copy `config.txt` into this repo before touching the Pi.
-2. Flash the Pi 5 Flexi-Pi image to the NVMe.
-3. Clone this repo, point LinuxCNC at `milo.ini`.
-4. Reconcile `milo.hal` against `config.txt`: joint order, PWM channel, input numbers,
+| | **Route A — LinuxCNC official image** | **Route B — Expatria Flexi-Pi** |
+|---|---|---|
+| OS base | Raspberry Pi OS **Trixie** (current) | Debian base unconfirmed; the Trixie migration was a Jan 2026 *pre-release*, so the stable build may still be Bookworm |
+| LinuxCNC | 2.9.8 | **2.10** (newer) |
+| Kernel | `6.12.34+rpt-rpi-v8-rt` — Pi Foundation's own PREEMPT_RT build | 6.6-rt |
+| Pi 5 | Officially supported (Pi 3 and earlier not recommended) | Supported, "significantly better performance than Pi 4" |
+| `remora-spi` | **You build it** — rp1lib + `halcompile` | **Pre-built and included** (stock `Remora-spi` and `Remora-eth-3.0`, as-is) |
+| Default UI | XFCE desktop, AXIS available | QtDragon_hd |
+| Size | 6.5 GB base, 16 GB minimum | — |
+
+**Chosen 2026-09-03: Route A.** A current Debian base was the priority, and the decisive point is
+that Route A does not make you pay for it with the risky part. The genuinely unbounded job in a
+LinuxCNC Pi build is the **real-time kernel**, not LinuxCNC — rolling your own means `rpi-update`
+into a bleeding-edge branch, plus the well-known trap where LinuxCNC reports *"Using POSIX
+non-realtime"* on a kernel that is actually fine. Route A hands you Trixie *and* an RT kernel the
+Pi Foundation built. What it costs is building `remora-spi`, which is a bounded, documented job
+in Remora's own install docs.
+
+Route B remains the better answer for anyone who wants zero build steps and doesn't care about
+the Debian base. Note its LinuxCNC is *newer*, not older — the concern with it is the OS, not the
+application.
+
+**Route C — plain Pi OS Trixie, roll everything yourself — was rejected.** It buys nothing over
+Route A and takes on the RT kernel as your problem. (A `2025-12-04-raspios-trixie-arm64-lite`
+image already sits in `~/Downloads` from Feb 2026; it is *Lite*, so it has no desktop for AXIS to
+draw on, and it is not a LinuxCNC image.)
+
+### Route A, step by step
+
+```
+image_2026-01-21-raspios-lcnc-2.9.8-trixie-arm64.zip
+https://www.linuxcnc.org/iso/image_2026-01-21-raspios-lcnc-2.9.8-trixie-arm64.zip
+md5  705b7f3c2f7b385f6cb094d05e01070e
+```
+
+1. **Read the Octopus's microSD first** — copy `config.txt` into this repo *before* touching the
+   Pi. See the section above.
+2. Flash the image to the Pi 5's NVMe (Raspberry Pi Imager; set username/password in the imager's
+   own settings, the image expects it).
+3. Build and install the Remora component: rp1lib, then `halcompile` the stock
+   `scottalford75/Remora` SPI component. Remora's install docs cover this.
+4. Clone this repo, point LinuxCNC at `milo.ini`.
+5. Reconcile `milo.hal` against `config.txt`: joint order, PWM channel, input numbers,
    `PRU_base_freq`.
-5. Work the "First power-on order" below.
+6. Work through "First power-on order" below.
 
-Two things to watch:
-- **The image's default UI is QtDragon_hd, not AXIS.** `milo.ini` sets `DISPLAY = axis`, which
-  works (AXIS ships with LinuxCNC) and is the simpler thing to bring up on. QtDragon_hd is worth
-  revisiting later — its probing and tool-table screens suit a mill with a toolsetter and a
-  touch probe.
-- **LinuxCNC 2.10 is newer than most Remora documentation assumes.** If anything in `milo.ini`
-  draws a deprecation warning it will most likely be the `[EMCIO]` section and the `iocontrol`
-  tool-change loopback, which is the part that has moved most between versions. Read the
-  startup output rather than assuming a clean load.
+### ⚠️ Do not upgrade the kernel
+
+The image ships `6.12.34+rpt-rpi-v8-rt`, which is the known-good one. **`6.12.47` was reported to
+crash.** Do not reflexively `rpi-update` or accept a kernel bump after flashing — you are on the
+good kernel out of the box. Pin it and leave it until something forces the issue.
+
+These Trixie images were still described as experimental as recently as the 2.9.7 builds, with
+the maintainer noting how little testing feedback he had. 2.9.8 is now *the* image on the official
+downloads page, so it has graduated — but it is young. If something behaves strangely in the first
+hours, suspect the image before suspecting your config.
 
 ## First power-on order
 
