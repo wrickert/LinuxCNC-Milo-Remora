@@ -8,7 +8,10 @@
 #   Octopus PA_5  SCK   <-> Pi header pin 23  (GPIO 11)
 #   Octopus PA_4  SSEL  <-> Pi header pin 24  (GPIO  8)
 #   Octopus GND         <-> Pi header pin 20
-# This link is already proven working on the bench.
+#   Octopus PC_15 RESET <-> Pi header pin 22  (GPIO 25)
+# GPIO 25 is HARDCODED in remora-spi.c (reset_gpio_pin), not a parameter.
+# Without that wire the watchdog cannot reset the PRU after an SPI fault.
+# The SPI link itself is already proven working on the bench.
 #
 # Pin assignments come from octopus/config.txt in this repo, which is the file
 # that must be copied onto the OCTOPUS's own microSD card as "config.txt".

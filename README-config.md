@@ -111,6 +111,79 @@ It is the source of truth for:
 repo. The whole reason the last attempt left nothing behind is that its configuration lived only
 on hardware.
 
+## What the flashed firmware tells us (FIRMWARE.CUR, 2025-11-08)
+
+`Nextcloud/MiloCNC/Remora Firmware/FIRMWARE.CUR` is the running firmware, renamed by the
+bootloader after flashing. Analysing it answers several things the config file could not.
+
+- **Remora-OS6, SPI variant** — strings `Mbed-OS6`, `Remora-spi Driver`, `Remora PRU`.
+  This matters: OS6 is the branch whose `configuration.h` we read `PRU_BASEFREQ 40000` from,
+  so that number applies to *this* binary.
+- **STM32F4 target** — `.\TARGET_STM32F4\drivers\SDIO\sdio_device.c`.
+- **Almost certainly the F446 build, not F429.** `file` reports *initial SP at 0x20020000*,
+  i.e. the stack starts at the top of 128 KB of SRAM. The F446 has 128 KB; an F429 build
+  would place it at 0x20030000 for its 192 KB. Confirm against the chip marking before
+  reflashing — flashing the wrong variant is the easy way to brick an afternoon.
+
+### ✅ The firmware supports everything `octopus/config.txt` uses
+
+Module type strings are compiled in, so they can be read straight out of the binary. All present:
+
+`Stepgen` · `Reset Pin` · `Digital Pin` · `PWM` · `Switch` · `TMC2208` · `TMC2209` · `eStop` ·
+`Blink` · `Encoder` · `QEI` · `Temperature` · `Motor Power` · `MCP4451` · `RCServo`
+
+Thread names `Base` / `Servo` / `On load` and the `Threads` + `Frequency` keys are present too,
+so the base-frequency override is available on this binary without reflashing.
+
+Config keys present: `Comment`, `Joint Number`, `Step Pin`, `Direction Pin`, `Enable Pin`,
+`RX pin`, `RSense`, `Current`, `Microsteps`, `Stealth chop`, `Stall sensitivity`, `Data Bit`,
+`Mode`, `Modules`, `PV[i]`.
+
+**So the new `octopus/config.txt` can be dropped straight onto the card — no reflash needed.**
+
+> Note: a naive search makes `Servo` look absent. It is not — the linker tail-merges it into
+> `RCServo`, and `Servo Pin` / `Servo thread object` are both in the binary.
+
+### Spindle PWM schema
+
+The PWM module's keys, read out of the firmware, are **`PWM Pin`** and **`PWM Max`**. So the
+block will look like:
+
+```json
+{ "Thread": "Servo", "Type": "PWM",
+  "Comment": "Spindle speed",
+  "PWM Pin": "PB_6",
+  "PWM Max": 24000 }
+```
+
+`PB_6` is the Octopus's servo/BLTouch control pin, which is where the Milo docs route the
+expansion board's PWM IN — but nothing is wired yet, so this block is deliberately **not** in
+`octopus/config.txt`. Add it when the expansion board goes in, and check the boot output: the
+firmware prints per-module messages as it parses, so a mistyped key shows up there.
+
+## ⚠️ Power: the current bench arrangement is temporary
+
+**The Octopus is presently powered from the Pi**, and the Pi is on a USB-C PD supply that does
+not deliver the full 5 A. That single supply is carrying the Pi 5, its SD card, and the Octopus's
+logic rail.
+
+**It browned out under load on 2026-09-04** — the Pi dropped off the network and needed a power
+cycle. It is fine for bench work at idle and it is how the SPI link was proven, but it must not
+survive into the built machine. The power-domain drawing stands: Pi on its own 5 V/5 A supply,
+Octopus on 24 V, **ground bonded, no 5 V link between them**.
+
+## ⚠️ One more wire: the PRU reset line
+
+`remora-spi.c` has:
+
+```c
+static int reset_gpio_pin = 25;   // RPI GPIO pin used to force watchdog reset of the PRU
+```
+
+Hardcoded — not a module parameter. So **Pi GPIO 25 (header pin 22) must go to the Octopus's
+reset pin**, which `config.txt` declares as `PC_15`. Without it the watchdog cannot reset the
+PRU, and the recovery path after an SPI fault does not work.
+
 ## Still open
 
 - **`TODO(pins)`** throughout `milo.hal` — endstops, spindle PWM + enable, probe,
