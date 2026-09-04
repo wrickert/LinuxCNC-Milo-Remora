@@ -16,7 +16,7 @@ cleanly in two:
 | Transfers as-is | Does **not** transfer |
 |---|---|
 | Steps/mm, lead screw ratios | Pin names (`PC_7`, `PD_11`, `PB_10`, `PE_6`, `PB_9`) |
-| Accelerations, max feeds | Driver current settings (`M906`) — depends on Octopus driver modules |
+| Accelerations, max feeds | Driver current (`M906`) — Remora's `Current` is RMS mA; RRF's is ambiguous |
 | Soft limits / travel | Motor direction (`M569 S0`) — relative to CDYv3 wiring |
 | Which end of each axis homes | |
 | Homing order and feeds | |
@@ -184,18 +184,83 @@ Hardcoded — not a module parameter. So **Pi GPIO 25 (header pin 22) must go to
 reset pin**, which `config.txt` declares as `PC_15`. Without it the watchdog cannot reset the
 PRU, and the recovery path after an SPI fault does not work.
 
+## HAL pin reference (read out of `remora-spi.c`, not guessed)
+
+These are **every** pin and parameter the component creates. Anything not on this list does not
+exist, however plausible it looks.
+
+| HAL object | Dir | Notes |
+|---|---|---|
+| `remora.SPI-enable` / `.SPI-reset` | in | e-stop chain |
+| `remora.SPI-status` | out | false when the link drops — the free watchdog |
+| `remora.PRU-reset` | in | hardware reset line; component pulses it itself |
+| `remora.joint.N.pos-cmd` / `.vel-cmd` / `.enable` | in | `%01d`, one digit |
+| `remora.joint.N.pos-fb` / `.freq-cmd` / `.counts` | out | |
+| `remora.joint.N.scale` / `.maxaccel` | **param** | hence `setp`, not `net` |
+| `remora.input.NN` / `.NN.not` | out | **`%02d` — two digits** |
+| `remora.output.NN` | in | **`%02d` — two digits** |
+| `remora.SP.N` | in | setpoint channel — this is how spindle speed reaches the PWM module |
+| `remora.PV.N` | out | process variable, used by the `Switch` module |
+
+> 🐛 **Bug this caught.** `milo.hal` had `remora.input.0`. The real name is `remora.input.00`.
+> A one-digit name does not error loudly — it simply never binds, and homing would never see a
+> switch. Fixed 2026-09-04.
+
+**There is no `remora.PWM.*` pin.** Spindle speed goes out on `remora.SP.<n>` and the firmware's
+PWM module consumes that index. See the spindle block in `milo.hal` for the matching firmware
+config.
+
+## Current build state (2026-09-04)
+
+**Pi:** `192.168.1.42`, hostname `milo`, user `cnc`, desktop key authorised.
+Pi 5 Rev 1.0 · LinuxCNC 2.9.8 · Debian 13 Trixie · kernel `6.12.34+rpt-rpi-v8-rt`.
+Booting from **SD**; the fitted NVMe holds another project's exfat partition.
+
+✅ `remora-spi.so` built and installed (`sudo halcompile --install ./Remora-spi/remora-spi.c`).
+rp1lib ships *inside* the component — nothing separate to build. It loads and initialises the
+RP1 correctly: maps SPI0, finds the Synopsys DWC SSI, claims GPIO 10/9/11/8.
+
+### 🚨 Open: LinuxCNC reports "Using POSIX non-realtime"
+
+The kernel *is* PREEMPT_RT. LinuxCNC can't tell. Chain:
+`makeApp()` → `if(euid != 0 || harden_rt() < 0)` → `harden_rt()` returns `-EINVAL` when
+`!rtapi_is_realtime()` → which `stat()`s **`/sys/kernel/realtime`**, a file that mainline
+PREEMPT_RT (6.12) no longer creates. The older out-of-tree RT patch did.
+
+- `rtapi_app` **is** setuid root, so this is not a permissions problem.
+- There is **no env override** — `FLAVOR=` and `RTAPI_FLAVOR=` are both ignored; the binary
+  contains no such string.
+- Upstream's fix is a **kernel patch** (add a `realtime_show` sysfs attribute, plus
+  `ARCH_SUPPORTS_RT` → `def_bool y`), i.e. a kernel rebuild.
+- ⚠️ **Irony worth recording: Flexi-Pi's older 6.6-rt kernel probably does not have this
+  problem**, because that RT patch still creates the file. The image rejected on 2026-09-03 for
+  being on an older base may be the one that just works.
+
+**Do not act on this yet.** Idle `cyclictest`: `SCHED_OTHER` max **13 µs** vs `SCHED_FIFO` max
+**9 µs**, against a 1000 µs servo period — negligible. If `SCHED_OTHER` also holds up *under
+load*, the whole thing is cosmetic and both the kernel patch and the reflash are moot. Run the
+loaded comparison first, **after** the power is sorted. Decide on data.
+
+### 🚨 Do not run `stress-ng` on this Pi
+
+It browned out and needed a power cycle on 2026-09-04. See the power section above: one
+under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's logic rail.
+
 ## Still open
 
-- **`TODO(pins)`** throughout `milo.hal` — endstops, spindle PWM + enable, probe,
-  toolsetter. These must be read off the real Octopus wiring.
-- **Which driver modules are in the Octopus**, and standalone vs UART. RRF asked for
-  1800 mA on X/Y (`M906 X1800 Y1800 Z1200`), which is at the top of a TMC2209's usable
-  range. If the Octopus has TMC2209s, verify that current is actually being set and
-  that the drivers aren't thermally throttling; if it has TMC5160s, it's a non-issue.
-- **Motor directions.** All three were reversed under RRF, but relative to CDYv3
-  wiring. Expect to negate one or more `SCALE` values. Flip the sign in the INI —
-  don't rewire.
-- **Whether the Octopus is even flashed with Remora yet.** Unknown as of 2026-09-03.
+| # | Item | State |
+|---|---|---|
+| 1 | Octopus SPI pins | ✅ `PA_7`/`PA_6`/`PA_5`/`PA_4` → Pi 19/21/23/24. Link proven working. |
+| 2 | PRU reset wire | ⚠️ Pi GPIO 25 (pin 22) → Octopus `PC_15`. Schema known; **wire not confirmed present**. |
+| 3 | Endstop inputs | ⚠️ Assigned `PG_6`/`PG_9`/`PG_10` → `remora.input.00/01/02`. Verify pins against silkscreen and polarity in halshow. |
+| 4 | Driver modules | ✅ TMC2209, now configured over UART in `octopus/config.txt`. |
+| 5 | Motor directions | ⚠️ All three were reversed under RRF, but relative to CDYv3 wiring. Expect to negate one or more `SCALE`. Flip the sign in the INI, don't rewire. |
+| 6 | TMC UART pins | ⚠️ `PC_4`/`PD_11`/`PC_6` from the standard Octopus v1.1 pinout, not Remora docs. **A wrong UART pin fails silently** — the driver keeps its defaults, i.e. StealthChop at the wrong current. Watch the boot output. |
+| 7 | Spindle PWM + enable | ⚠️ Schema known (`SP` / `PWM Pin` / `PWM Max`). Nothing wired yet. |
+| 8 | Spindle at-speed | 🚨 No signal. Without one, G-code plunges before the spindle is up to speed. Needs a VFD "up to frequency" output, or Modbus. |
+| 9 | VFD make/model | 🚨 Still unknown. Decides analog+relay vs Modbus — a fork in the wiring, not a setting. |
+| 10 | Probe / toolsetter | ⏸ Deliberately last. Both existed under RRF. |
+| 11 | RT flavour | 🚨 See above. Blocked on the loaded latency test. |
 
 ## Rebuild path (Pi side, from scratch)
 

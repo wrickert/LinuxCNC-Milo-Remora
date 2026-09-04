@@ -56,11 +56,17 @@ net user-enable-out     iocontrol.0.user-enable-out     => remora.SPI-enable
 net user-request-enable iocontrol.0.user-request-enable => remora.SPI-reset
 net remora-status       remora.SPI-status               => iocontrol.0.emc-enable-in
 
+# remora.PRU-reset drives the hardware reset line (Pi GPIO 25 -> Octopus
+# PC_15). Left unnetted: the component pulses it internally on SPI failure.
+
 ##############################################################################
 # JOINTS
 #
-# Remora joint indices must match the stepgen order in the Octopus's Remora
-# config.json. Assumed here: 0=X, 1=Y, 2=Z (matching RRF's M584 X0 Y1 Z2).
+# CONFIRMED against octopus/config.txt: 0=X (MOTOR0), 1=Y (MOTOR1), 2=Z
+# (MOTOR2) — which also matches RRF's M584 X0 Y1 Z2.
+#
+# NOTE: .scale and .maxaccel are HAL *parameters* (hal_param_float_newf),
+# which is why they are set with setp and not net.
 ##############################################################################
 
 # ---- Joint 0 : X ----
@@ -101,29 +107,56 @@ net z-enable   joint.2.amp-enable-out => remora.joint.2.enable
 # Those pin numbers come from the standard Octopus v1.1 pinout, NOT from
 # Remora's docs — check them against the board silkscreen.
 # Verify in halshow that each pin reads FALSE with the switch open and TRUE
-# when pressed by hand. If one reads inverted, swap remora.input.N for
-# remora.input.N.not rather than editing the firmware.
+# when pressed by hand. If one reads inverted, swap remora.input.NN for
+# remora.input.NN.not rather than editing the firmware.
 ##############################################################################
 
-# Data Bit N in octopus/config.txt maps to remora.input.N here.
+# Data Bit N in octopus/config.txt maps to remora.input.NN here.
+# ⚠️ TWO DIGITS. remora-spi.c creates these as "%s.input.%02d", so the pin is
+#    remora.input.00, NOT remora.input.0 — a one-digit name silently fails to
+#    bind and homing never sees the switch.
 # ⚠️ VERIFY IN HALSHOW, MOTORS UNPOWERED, before homing anything.
-net x-home  remora.input.0 => joint.0.home-sw-in
-net y-home  remora.input.1 => joint.1.home-sw-in
-net z-home  remora.input.2 => joint.2.home-sw-in
+net x-home  remora.input.00 => joint.0.home-sw-in
+net y-home  remora.input.01 => joint.1.home-sw-in
+net z-home  remora.input.02 => joint.2.home-sw-in
 
 ##############################################################################
 # SPINDLE — RRF: M950 R0 C"PE_6+!PB_9" L24000 Q100
+#   L24000 = 24000 RPM full scale, Q100 = 100 Hz PWM, !PB_9 = inverted enable
 #
-# 24000 RPM full scale, 100 Hz PWM, inverted enable line.
-# TODO(pins): confirm which Octopus PWM output and which enable output are
-# actually wired to the spindle controller.
+# ⚠️ There is NO remora.PWM.* HAL pin. Confirmed from remora-spi.c: the only
+#    pins it creates are SPI-enable/reset/status, PRU-reset, joint.N.*,
+#    input.NN(.not), output.NN, SP.N and PV.N.
+#
+# Spindle speed therefore travels on a SETPOINT channel: LinuxCNC writes
+# remora.SP.<n>, and the firmware's PWM module consumes that index.
+#
+# Firmware side (octopus/config.txt), once the expansion board is wired.
+# Keys confirmed by reading the flashed FIRMWARE.CUR:
+#     { "Thread": "Servo", "Type": "PWM",
+#       "Comment":      "Spindle speed",
+#       "SP":           0,
+#       "PWM Pin":      "PB_6",
+#       "PWM Max":      24000,
+#       "Hardware PWM": "True" }
+#   PB_6 is the Octopus servo/BLTouch pin — where the Milo docs route the
+#   expansion board's PWM IN. Hardware PWM only works on timer-capable pins;
+#   the firmware prints "Error: Hardware PWM cannot this pin" otherwise, so
+#   read the boot output. "Variable Freq" is also supported if needed.
+#
+# Enable relay: a Digital Pin in Output mode -> remora.output.NN (two digits).
+#
+# TODO(wiring): nothing is connected to the expansion board or relay yet, so
+# these stay commented. Confirm the physical pins before uncommenting.
 ##############################################################################
 
-# setp remora.PWM.<N>.period 100                          # TODO(pins) 100 Hz, per Q100
-# setp remora.PWM.<N>.scale  [SPINDLE_0]MAX_FORWARD_VELOCITY
-# net spindle-speed  spindle.0.speed-out-abs => remora.PWM.<N>.value
-# net spindle-on     spindle.0.on            => remora.output.<N>   # invert if needed
-# net spindle-at-speed spindle.0.at-speed  <= remora.SPI-status     # placeholder
+# net spindle-speed  spindle.0.speed-out-abs => remora.SP.0
+# net spindle-on     spindle.0.on            => remora.output.00
+
+# spindle.0.at-speed deliberately NOT wired to a placeholder. Without a real
+# signal G-code plunges the moment M3 is issued, before the spindle spools up.
+# See README-config.md — the answer is a VFD "up to frequency" output into a
+# remora input, or Modbus if the drive is a Huanyang.
 
 ##############################################################################
 # TOOLSETTER / TOUCH PROBE
@@ -134,7 +167,7 @@ net z-home  remora.input.2 => joint.2.home-sw-in
 # TODO(pins)
 ##############################################################################
 
-# net probe-in  remora.input.<N> => motion.probe-input     # TODO(pins)
+# net probe-in  remora.input.NN => motion.probe-input     # TODO(wiring)
 
 # --- Tool change (manual) ----------------------------------------------------
 net tool-change     iocontrol.0.tool-change     => iocontrol.0.tool-changed
