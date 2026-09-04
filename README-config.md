@@ -235,6 +235,27 @@ With no USB console we are blind: we cannot tell a dead board from an unwired ri
 config the firmware rejected. With one, every question above is answered in five seconds, and it
 is also how the new `config.txt` gets validated (a mistyped key shows up there and nowhere else).
 
+## Pi &#8594; Octopus: use one connector, not six flying leads
+
+Every signal the interface needs sits in a **contiguous block on the 40-pin header**:
+
+| Pin | Signal | | Pin | Signal |
+|---|---|---|---|---|
+| 19 | MOSI | | 20 | GND |
+| 21 | MISO | | 22 | **GPIO 25 — PRU reset** |
+| 23 | SCLK | | 24 | CE0 |
+| 25 | GND | | 26 | CE1 (unused) |
+
+So a single **2×4 IDC socket over pins 19&#8211;26** carries the whole thing: both SPI, chip
+select, the reset line, and **two** grounds — one of which (pin 25) sits directly beside SCLK in
+the same row, giving the clock an adjacent return. A 2×3 over 19&#8211;24 also works and covers
+every required signal, but only gets you one ground.
+
+This is better than loose jumpers for three reasons beyond tidiness: it is keyed so it cannot be
+plugged one pin over, it keeps the run short, and the ribbon's conductor order is fixed so the
+ground stays next to the clock. Short and keyed is itself most of the EMI mitigation — see the
+spindle-cable warning above.
+
 ## Current build state (2026-09-04)
 
 **Pi:** `192.168.1.42`, hostname `milo`, user `cnc`, desktop key authorised.
