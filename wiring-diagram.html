@@ -225,12 +225,12 @@
   <header class="titleblock">
     <div class="tb-main">
       <h1>Milo Control Wiring</h1>
-      <p class="sub">Interconnect plan for the LinuxCNC conversion — power domains, the SPI link, the spindle chain, and the e&#8209;stop. The Pi&#8209;to&#8209;Octopus SPI link is proven working. Signal paths are settled; every pin number still to be read off the hardware is marked.</p>
+      <p class="sub">Interconnect plan for the LinuxCNC conversion — power domains, the SPI link, the spindle chain, and the e&#8209;stop. The Pi is built and the Remora component is running on it. Signal paths and pin assignments are settled; what remains unverified against the physical board is marked.</p>
     </div>
     <div class="tb-cell"><span class="k">Machine</span><span class="v">Milo v1.5</span></div>
     <div class="tb-cell"><span class="k">Controller</span><span class="v">BTT Octopus v1.1</span></div>
     <div class="tb-cell"><span class="k">Host</span><span class="v">Raspberry Pi 5</span></div>
-    <div class="tb-cell"><span class="k">Status</span><span class="v">SPI link live · panel not built</span></div>
+    <div class="tb-cell"><span class="k">Status</span><span class="v">Pi built · bench-powered · panel not built</span></div>
   </header>
 
   <div class="legend">
@@ -332,7 +332,7 @@
 
     <figure>
       <div class="figscroll">
-        <svg viewBox="0 0 1020 340" role="img" aria-label="Signal chain: the Raspberry Pi 5 talks to the BTT Octopus over SPI0. Three normally-closed endstop switches feed into the Octopus. The Octopus sends PWM to the Milo expansion board, which outputs 0 to 10 volts to the VFD, and drives an enable relay that closes the VFD's STF run input.">
+        <svg viewBox="0 0 1020 340" role="img" aria-label="Signal chain: the Raspberry Pi 5 talks to the BTT Octopus over SPI0. A separate hardware reset line runs alongside SPI. Three normally-closed endstop switches feed into the Octopus. The Octopus sends PWM to the Milo expansion board, which outputs 0 to 10 volts to the VFD, and drives an enable relay that closes the VFD's STF run input.">
           <defs>
             <marker id="b-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-sig" d="M0,0 L10,5 L0,10 z"/></marker>
           </defs>
@@ -361,8 +361,10 @@
           <text class="t" x="925" y="180" text-anchor="middle">VFD</text>
           <text class="ts" x="925" y="198" text-anchor="middle">spindle drive</text>
 
-          <path class="wire w-sig" d="M200,156 L262,156" marker-end="url(#b-sig)"/>
-          <text class="tw tw-sig" x="231" y="148" text-anchor="middle">SPI0</text>
+          <path class="wire w-sig" d="M200,146 L262,146" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="231" y="138" text-anchor="middle">SPI0</text>
+          <path class="wire w-sig" d="M200,174 L262,174" marker-end="url(#b-sig)"/>
+          <text class="tw tw-sig" x="228" y="193" text-anchor="middle">RESET</text>
 
           <path class="wire w-sig" d="M200,282 L262,282" marker-end="url(#b-sig)"/>
           <text class="tw tw-sig" x="231" y="274" text-anchor="middle">3 &#215; NC</text>
@@ -392,11 +394,12 @@
       <table>
         <thead><tr><th>Signal</th><th>Pi 5 GPIO</th><th>Header pin</th><th>Octopus</th></tr></thead>
         <tbody>
-          <tr><td class="m">MOSI</td><td class="m">GPIO 10</td><td class="m">19</td><td class="unk">in your Remora config</td></tr>
-          <tr><td class="m">MISO</td><td class="m">GPIO 9</td><td class="m">21</td><td class="unk">in your Remora config</td></tr>
-          <tr><td class="m">SCLK</td><td class="m">GPIO 11</td><td class="m">23</td><td class="unk">in your Remora config</td></tr>
-          <tr><td class="m">CE0</td><td class="m">GPIO 8</td><td class="m">24</td><td class="unk">in your Remora config</td></tr>
+          <tr><td class="m">MOSI</td><td class="m">GPIO 10</td><td class="m">19</td><td class="m">PA_7</td></tr>
+          <tr><td class="m">MISO</td><td class="m">GPIO 9</td><td class="m">21</td><td class="m">PA_6</td></tr>
+          <tr><td class="m">SCLK</td><td class="m">GPIO 11</td><td class="m">23</td><td class="m">PA_5</td></tr>
+          <tr><td class="m">SSEL / CE0</td><td class="m">GPIO 8</td><td class="m">24</td><td class="m">PA_4</td></tr>
           <tr><td class="m">GND</td><td class="m">&#8212;</td><td class="m">20</td><td class="m">any GND</td></tr>
+          <tr><td class="m">PRU reset</td><td class="m">GPIO 25</td><td class="m">22</td><td class="m">PC_15</td></tr>
         </tbody>
       </table>
     </div>
@@ -425,6 +428,22 @@
       </table>
     </div>
 
+    <h3>How the speed signal actually gets there</h3>
+    <p>Worth knowing before wiring, because it isn&#39;t what you would guess: <strong>Remora exposes no PWM pin to LinuxCNC at all.</strong> The component creates only <span class="mono">SPI-*</span>, <span class="mono">PRU-reset</span>, <span class="mono">joint.N.*</span>, <span class="mono">input.NN</span>, <span class="mono">output.NN</span>, <span class="mono">SP.N</span> and <span class="mono">PV.N</span>.</p>
+    <p>Spindle speed therefore travels on a <em>setpoint channel</em>: LinuxCNC writes <span class="mono">remora.SP.0</span>, and the firmware&#39;s PWM module consumes that index and drives the pin. The firmware-side block, with keys read out of the flashed binary:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Key</th><th>Value</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="m">SP</td><td class="m">0</td><td>setpoint index &#8594; <span class="mono">remora.SP.0</span></td></tr>
+          <tr><td class="m">PWM Pin</td><td class="m">PB_6</td><td>Octopus servo/BLTouch pin — where the Milo docs route the expansion board&#39;s PWM IN</td></tr>
+          <tr><td class="m">PWM Max</td><td class="m">24000</td><td>full-scale rpm</td></tr>
+          <tr><td class="m">Hardware PWM</td><td class="m">True</td><td>timer-capable pins only; the firmware prints an error otherwise</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The enable relay is a Digital Pin in Output mode, reaching HAL as <span class="mono">remora.output.00</span>. Note the <strong>two digits</strong> — a one-digit name silently fails to bind rather than erroring.</p>
+
     <div class="callout">
       <span class="ch">Verify before you land these</span>
       <p>Those designations come from the Milo documentation, which assumes a Mitsubishi&#8209;style terminal layout. <strong>VFD terminal numbering varies by manufacturer.</strong> On many drives one of the low-numbered analog terminals is a <em>10&nbsp;V reference output</em>, not an input — wiring your 0–10&nbsp;V signal into it shorts an output against a source. Check your drive's own manual and confirm which terminal is the analog <em>input</em> before connecting anything.</p>
@@ -448,15 +467,17 @@
 
   <section>
     <h2>Before you cut a wire</h2>
-    <p>Seven things this drawing can&#39;t settle on its own &#8212; two now answered. Each of the rest has a definite answer sitting on the hardware or in a manual.</p>
+    <p>Nine items. Four are settled, five are not &#8212; and the split matters, because everything still open needs the physical board in front of you.</p>
     <div class="open">
-      <div class="row"><span class="n">01</span><span class="b"><span class="q">Octopus SPI header pins <span class="st st-done">Resolved</span></span><span class="a">The link is up and passing traffic. Pull the pin names out of the Octopus&#39;s <span class="mono">config.json</span> and into the repo so this stops being knowledge that lives only on the machine.</span></span></div>
-      <div class="row"><span class="n">02</span><span class="b"><span class="q">Which output drives the expansion board&#39;s PWM in <span class="st st-open">Open</span></span><span class="a">On the Milo&#39;s original mainboard this was the BLTouch connector. The Octopus equivalent depends on what Remora exposes as a PWM channel &#8212; also in <span class="mono">config.json</span>.</span></span></div>
-      <div class="row"><span class="n">03</span><span class="b"><span class="q">Which output drives the enable relay <span class="st st-open">Open</span></span><span class="a">Needs to be an output Remora holds in a defined state at power-up. A spindle that starts on boot is the failure you don&#39;t get a second look at.</span></span></div>
-      <div class="row"><span class="n">04</span><span class="b"><span class="q">Endstop input numbers, and switch polarity <span class="st st-open">Open</span></span><span class="a">Three switches: X at min, Y at max, Z at max. Verify each in halshow with motors unpowered before homing anything.</span></span></div>
-      <div class="row"><span class="n">05</span><span class="b"><span class="q">Which driver modules are in the Octopus <span class="st st-open">Open</span></span><span class="a">RepRapFirmware asked for 1800&#8239;mA on X and Y, which is at the ceiling of a TMC2209&#39;s usable range and a non-issue on a TMC5160. Read the labels on the modules.</span></span></div>
-      <div class="row"><span class="n">06</span><span class="b"><span class="q">VFD make, model and terminal designations <span class="st st-open">Open</span></span><span class="a">See the spindle warning above. This is the one place where a guess can destroy hardware.</span></span></div>
-      <div class="row"><span class="n">07</span><span class="b"><span class="q">Mains voltage for the VFD <span class="st st-done">Resolved</span></span><span class="a">110&#8239;V single-phase in, three-phase out to the spindle. The mains side of the power diagram stands as drawn &#8212; one ordinary house circuit through the contactor, no 240&#8239;V feed to design around.</span></span></div>
+      <div class="row"><span class="n">01</span><span class="b"><span class="q">Octopus SPI pins <span class="st st-done">Resolved</span></span><span class="a">PA_7 / PA_6 / PA_5 / PA_4 to Pi 19/21/23/24. Link proven, and the component was watched claiming those GPIOs as it initialised.</span></span></div>
+      <div class="row"><span class="n">02</span><span class="b"><span class="q">Driver modules <span class="st st-done">Resolved</span></span><span class="a">TMC2209, pulled from the old board. Now configured over UART rather than left at defaults &#8212; which is what gets them out of StealthChop.</span></span></div>
+      <div class="row"><span class="n">03</span><span class="b"><span class="q">Mains voltage for the VFD <span class="st st-done">Resolved</span></span><span class="a">110&#8239;V single-phase in, three-phase out. One ordinary house circuit through the contactor; no 240&#8239;V feed to design around.</span></span></div>
+      <div class="row"><span class="n">04</span><span class="b"><span class="q">Spindle PWM schema <span class="st st-done">Resolved</span></span><span class="a">Speed goes out on <span class="mono">remora.SP.0</span>; the firmware PWM module takes SP / PWM Pin / PWM Max / Hardware PWM. Read out of the flashed firmware, so it is right for this binary.</span></span></div>
+      <div class="row"><span class="n">05</span><span class="b"><span class="q">The PRU reset wire <span class="st st-open">Open</span></span><span class="a">Pi GPIO 25 (pin 22) to Octopus PC_15. Hardcoded in the component, so it appears in no config file. Confirm the wire is physically present.</span></span></div>
+      <div class="row"><span class="n">06</span><span class="b"><span class="q">Endstop pins and polarity <span class="st st-open">Open</span></span><span class="a">Assigned PG_6 / PG_9 / PG_10 on DIAG0&#8211;2, reaching HAL as <span class="mono">remora.input.00/01/02</span>. Those pin numbers come from the standard board pinout, not Remora&#39;s docs. Check the silkscreen, then check polarity in halshow with motors unpowered.</span></span></div>
+      <div class="row"><span class="n">07</span><span class="b"><span class="q">TMC UART pins <span class="st st-open">Open</span></span><span class="a">PC_4 / PD_11 / PC_6, again from the standard pinout. <strong>A wrong UART pin fails silently</strong> &#8212; the driver simply keeps its defaults, so you would be back on StealthChop at the wrong current with nothing complaining. Watch the boot output.</span></span></div>
+      <div class="row"><span class="n">08</span><span class="b"><span class="q">VFD make, model and terminals <span class="st st-open">Open</span></span><span class="a">Still the one place where a guess can destroy hardware. It also decides analog-plus-relay versus Modbus, which is a fork in the wiring rather than a setting.</span></span></div>
+      <div class="row"><span class="n">09</span><span class="b"><span class="q">Spindle at-speed <span class="st st-open">Open</span></span><span class="a">There is no signal, and without one G-code plunges the moment it issues M3 &#8212; before the spindle has spooled up. Wants the VFD&#39;s &quot;up to frequency&quot; output into a Remora input, or Modbus if the drive turns out to be a Huanyang.</span></span></div>
     </div>
   </section>
 
