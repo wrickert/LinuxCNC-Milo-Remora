@@ -1,0 +1,99 @@
+{
+	"Board": "BIGTREETECH OCTOPUS",
+	"Modules":[
+	{
+	"Thread": "Servo",
+	"Type": "Reset Pin",
+		"Comment":			"Reset pin",
+		"Pin":				"PC_15"
+	},
+
+	{
+	"Thread": "Base",
+	"Type": "Stepgen",
+		"Comment":			"X - Joint 0 step generator (MOTOR0)",
+		"Joint Number":		0,
+		"Step Pin": 		"PF_13",
+		"Direction Pin": 	"PF_12",
+		"Enable Pin": 		"PF_14"
+	},
+	{
+	"Thread": "On load",
+	"Type": "TMC2209",
+		"Comment":			"X - Joint 0 driver (MOTOR0 UART)",
+		"RX pin": 			"PC_4",
+		"RSense":			0.11,
+		"Current":			1200,
+		"Microsteps":		8,
+		"Stealth chop":		"off",
+		"Stall sensitivity":0
+	},
+
+	{
+	"Thread": "Base",
+	"Type": "Stepgen",
+		"Comment":			"Y - Joint 1 step generator (MOTOR1)",
+		"Joint Number":		1,
+		"Step Pin": 		"PG_0",
+		"Direction Pin": 	"PG_1",
+		"Enable Pin": 		"PF_15"
+	},
+	{
+	"Thread": "On load",
+	"Type": "TMC2209",
+		"Comment":			"Y - Joint 1 driver (MOTOR1 UART)",
+		"RX pin": 			"PD_11",
+		"RSense":			0.11,
+		"Current":			1200,
+		"Microsteps":		8,
+		"Stealth chop":		"off",
+		"Stall sensitivity":0
+	},
+
+	{
+	"Thread": "Base",
+	"Type": "Stepgen",
+		"Comment":			"Z - Joint 2 step generator (MOTOR2)",
+		"Joint Number":		2,
+		"Step Pin": 		"PF_11",
+		"Direction Pin": 	"PG_3",
+		"Enable Pin": 		"PG_5"
+	},
+	{
+	"Thread": "On load",
+	"Type": "TMC2209",
+		"Comment":			"Z - Joint 2 driver (MOTOR2 UART)",
+		"RX pin": 			"PC_6",
+		"RSense":			0.11,
+		"Current":			900,
+		"Microsteps":		8,
+		"Stealth chop":		"off",
+		"Stall sensitivity":0
+	},
+
+	{
+	"Thread": "Servo",
+	"Type": "Digital Pin",
+		"Comment":			"X min endstop  -> remora.input.0",
+		"Pin":				"PG_6",
+		"Mode":				"Input",
+		"Data Bit":			0
+	},
+	{
+	"Thread": "Servo",
+	"Type": "Digital Pin",
+		"Comment":			"Y max endstop  -> remora.input.1",
+		"Pin":				"PG_9",
+		"Mode":				"Input",
+		"Data Bit":			1
+	},
+	{
+	"Thread": "Servo",
+	"Type": "Digital Pin",
+		"Comment":			"Z max endstop  -> remora.input.2",
+		"Pin":				"PG_10",
+		"Mode":				"Input",
+		"Data Bit":			2
+	}
+	]
+}

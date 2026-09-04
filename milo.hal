@@ -3,7 +3,17 @@
 #
 # Pi 5 (rp1lib) <-- SPI --> BTT Octopus v1.1 running Remora firmware
 #
-# Every "TODO(pins)" below needs a number read off the real Octopus wiring.
+#   Octopus PA_7  MOSI  <-> Pi header pin 19  (GPIO 10)
+#   Octopus PA_6  MISO  <-> Pi header pin 21  (GPIO  9)
+#   Octopus PA_5  SCK   <-> Pi header pin 23  (GPIO 11)
+#   Octopus PA_4  SSEL  <-> Pi header pin 24  (GPIO  8)
+#   Octopus GND         <-> Pi header pin 20
+# This link is already proven working on the bench.
+#
+# Pin assignments come from octopus/config.txt in this repo, which is the file
+# that must be copied onto the OCTOPUS's own microSD card as "config.txt".
+# The two must always agree — joint numbers, Data Bit numbers, base frequency.
+#
 # The RRF config's pin names (PC_7, PD_11, PB_10, PE_6, PB_9) were Fly-CDYv3
 # pins and are USELESS here — the CDYv3 is out of the machine.
 #
@@ -26,6 +36,8 @@ loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JO
 # off again at the first sign of "SPI comms error" in dmesg.
 # Verify both parameter names against your Remora version's docs before relying
 # on them — they have changed between releases.
+# 40000 is CONFIRMED: PRU_BASEFREQ in Remora-OS6/configuration.h, and
+# octopus/config.txt has no "Threads" override.
 loadrt remora-spi SPI_clk_div=32 PRU_base_freq=40000
 
 addf remora.read            servo-thread
@@ -81,15 +93,20 @@ net z-enable   joint.2.amp-enable-out => remora.joint.2.enable
 # Each is wired as home-only here; travel is protected by the soft limits in
 # milo.ini, which is why HOME_IGNORE_LIMITS is set on all three joints.
 #
-# TODO(pins): replace each <N> with the Remora input number the switch actually
-# lands on, then verify in halshow that each pin reads FALSE when the switch is
-# open and TRUE when pressed by hand. If a switch reads inverted, swap
-# remora.input.<N> for remora.input.<N>.not rather than editing the firmware.
+# Wired in octopus/config.txt as Digital Pin inputs on the Octopus's DIAG
+# headers: X=PG_6 (DIAG0), Y=PG_9 (DIAG1), Z=PG_10 (DIAG2).
+# Those pin numbers come from the standard Octopus v1.1 pinout, NOT from
+# Remora's docs — check them against the board silkscreen.
+# Verify in halshow that each pin reads FALSE with the switch open and TRUE
+# when pressed by hand. If one reads inverted, swap remora.input.N for
+# remora.input.N.not rather than editing the firmware.
 ##############################################################################
 
-# net x-home  remora.input.<N> => joint.0.home-sw-in     # TODO(pins)
-# net y-home  remora.input.<N> => joint.1.home-sw-in     # TODO(pins)
-# net z-home  remora.input.<N> => joint.2.home-sw-in     # TODO(pins)
+# Data Bit N in octopus/config.txt maps to remora.input.N here.
+# ⚠️ VERIFY IN HALSHOW, MOTORS UNPOWERED, before homing anything.
+net x-home  remora.input.0 => joint.0.home-sw-in
+net y-home  remora.input.1 => joint.1.home-sw-in
+net z-home  remora.input.2 => joint.2.home-sw-in
 
 ##############################################################################
 # SPINDLE — RRF: M950 R0 C"PE_6+!PB_9" L24000 Q100

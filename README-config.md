@@ -74,11 +74,20 @@ inside what the machine can actually hold. And TMC drivers interpolate internall
 microsteps regardless of the step input rate, so motor smoothness is unaffected — the
 interpolation is doing that work either way.
 
-**The alternative, if you want 16:** recompile the Remora firmware with a higher `PRU_BASEFREQ`
-in `configuration.h` (the STM32F4 has headroom above 40 kHz), and pass the matching
-`PRU_base_freq` to `loadrt remora-spi`. **Both must agree** — the HAL parameter only tells the
-component what the firmware is doing; it does not configure the firmware. Not worth it unless
-something else forces 16.
+**Correction: the base frequency is a config line, not a recompile.** `main.cpp` reads a
+top-level `"Threads"` array from `config.txt`, so you can raise it without rebuilding firmware:
+
+```json
+"Threads":[ { "Thread": "Base", "Frequency": 80000 } ],
+```
+
+`PRU_BASEFREQ` in `Remora-OS6/configuration.h` is the *default* when that block is absent, and it
+is confirmed at `40000` (the source comment shows it was raised from 24000, i.e. 40 kHz is the
+tested value). Pushing to 80 kHz doubles how often the base ISR fires on the STM32 — beyond what
+upstream ships as tested, and an overrunning base thread costs you steps. **Stay at 8 microsteps
+and the stock 40 kHz unless something forces otherwise.** If you do raise it, `PRU_base_freq` in
+`milo.hal` must be changed to match — the HAL parameter only tells the component what the
+firmware is doing, it does not configure it.
 
 Three things must agree on whichever you pick:
 1. `SCALE` in `milo.ini`
