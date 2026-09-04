@@ -172,6 +172,25 @@ cycle. It is fine for bench work at idle and it is how the SPI link was proven, 
 survive into the built machine. The power-domain drawing stands: Pi on its own 5 V/5 A supply,
 Octopus on 24 V, **ground bonded, no 5 V link between them**.
 
+### ✅ Pi supply replaced later the same day — the Pi side is now clean
+
+A better USB-C PD supply went on 2026-09-04 and it fixed the brownouts outright:
+
+| | old supply (boot 12:27, ~4 h) | new supply (boot 16:41) |
+|---|---|---|
+| `vcgencmd get_throttled` | undervoltage bits set | **`0x0`** |
+| `hwmon3: Undervoltage detected!` | 4 events | **none** |
+| `EXT5V_V` | — | **5.176 V** |
+
+`get_throttled` bits 16–19 are **sticky since boot**, so an all-clear reading after an hour of
+uptime is real evidence, not a snapshot. Read it with `vcgencmd get_throttled` and the rail
+directly with `vcgencmd pmic_read_adc | grep EXT5V`.
+
+⚠️ **This clears the Pi, not the Octopus.** Candidate 3 in the SPI list below was "the Octopus is
+not adequately powered, it is fed from the Pi, which is browning out". The Pi half of that is now
+disproved. Whether the Octopus's own rail is adequate is still untested, and the split-supply
+plan above is still the right end state.
+
 ## ⚠️ One more wire: the PRU reset line
 
 `remora-spi.c` has:
@@ -224,6 +243,44 @@ Cause cannot be determined remotely. Candidates, all physical:
 
 **Also learned:** `SPI_clk_div` is accepted but ignored — BAUDR stayed 20 MHz for 10/32/64/128.
 `SPI_freq` is the parameter that works. `milo.hal` now uses `SPI_freq=2000000`.
+
+### Retest after the power-supply swap — still FALSE, but the test proved nothing
+
+Retested at 2 MHz once the Pi's rail was clean: `remora.SPI-status` still **FALSE**.
+
+🚨 **Do not read anything into that result.** The Octopus was *not confirmed connected* when it
+ran — only the Pi's supply had been changed. A FALSE reading with the ribbon possibly unplugged
+is not a data point. **Before any future link test, confirm the ribbon is on and the Octopus is
+powered**, or the result is unfalsifiable.
+
+### 🔍 The MISO pull-up test — tells you which side is silent
+
+Worth knowing because it separates "nothing is connected" from "connected but not talking",
+which the `SPI-status` bit alone cannot:
+
+```sh
+# 1. Raw transfer, no LinuxCNC involved. All-zero rx = nothing came back.
+python3 -c 'import spidev; s=spidev.SpiDev(); s.open(0,0); s.max_speed_hz=2000000; \
+  print([hex(b) for b in s.xfer2([0xAA,0x55,0x00,0xFF])])'
+
+# 2. Decide whether MISO is floating or actively driven.
+pinctrl set 9 ip pu && pinctrl get 9     # pull-up
+pinctrl set 9 ip pd && pinctrl get 9     # pull-down (control)
+pinctrl set 9 a0                         # RESTORE to SPI0_MISO when done
+```
+
+Result on 2026-09-04: raw rx all `0x00`, and MISO followed the internal pull **both ways** —
+`pu` → `hi`, `pd` → `lo`.
+
+**Interpretation: nothing on the far end is driving MISO.** The Pi's internal pull is ~50 kΩ; a
+powered STM32 holding that pin low would sink far more than the pull-up can source, so the line
+could not have gone high. A line that simply follows whichever pull you apply is an unterminated
+one. That points at the ribbon, the Octopus's power, or the STM32 being held in reset — **not**
+at clock rate, protocol, or the `remora-spi` component.
+
+> ⚠️ GPIO 25 idles as an **output driving low**, which is normal — the component pulses the PRU
+> reset itself on SPI failure rather than holding it. Do not mistake the idle-low state for the
+> board being held in reset.
 
 ### 🔌 Get a USB cable onto the Octopus
 
@@ -307,6 +364,42 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 | 9 | VFD make/model | 🚨 Still unknown. Decides analog+relay vs Modbus — a fork in the wiring, not a setting. |
 | 10 | Probe / toolsetter | ⏸ Deliberately last. Both existed under RRF. |
 | 11 | RT flavour | 🚨 See above. Blocked on the loaded latency test. |
+
+## 💾 Storage: SD → NVMe, and keeping the card as a live fallback
+
+The Pi has a 128 GB NVMe (YMTC, on the HAT). As found on 2026-09-04 it held a **Ventoy** layout —
+119.2 G exfat `Flash128` plus a 1 M `UEFI_NTFS` stub — and was **effectively empty: 768 KB used,
+one empty `System Volume Information` folder, no ISOs, no user files.** Nothing was lost by
+reusing it.
+
+**No EEPROM change is needed.** `BOOT_ORDER=0xf416` reads right-to-left as **NVMe → SD → USB →
+retry**, so the Pi already tries the NVMe first and falls through to the SD only because an exfat
+partition isn't bootable. Put a real OS on it and it boots. Bootloader was current (Dec 2025).
+
+**PCIe runs at Gen 2 x1** (`LnkSta: 5GT/s, Width x1`) even though the SSD advertises 8GT/s x4 —
+the Pi 5 only has one lane. `dtparam=pciex1_gen=3` would force Gen 3; **don't.** It is uncertified
+and this box will run a mill. Gen 2 x1 is ~450 MB/s, still an order of magnitude over the card.
+
+### The scripts
+
+| Script | Runs on | Does |
+|---|---|---|
+| `nvme-clone.sh` | the Pi, `sudo` | clones the running SD onto the NVMe |
+| `deploy.sh` | the desktop | pushes this repo's config to the Pi, verifies byte-for-byte |
+| `sync-to-sd.sh` | the Pi, `sudo` | refreshes the SD fallback from the running NVMe |
+
+🚨 **The clone gives the NVMe a different MBR disk ID (`0x1a2b3c4d`) than the SD (`0xb3a878db`).**
+This is not cosmetic. PARTUUIDs are derived from the disk ID, so cloning the table verbatim would
+put two partitions with identical PARTUUIDs in the same machine and `root=PARTUUID=` could resolve
+to either one. `sync-to-sd.sh` therefore never touches the SD's `fstab` or `cmdline.txt` — the
+card has to keep pointing at its own `b3a878db-*`, or it stops booting.
+
+### The discipline that matters
+
+**This repo is the source of truth; the Pi is a deploy target.** The reason the original
+SPI/Remora build is stranded on one old SD card is precisely that it only ever existed on the
+machine. Edit here → commit → `./deploy.sh`. After a config change, run `sudo ./sync-to-sd.sh`
+so the fallback card isn't months behind the drive that's actually booting.
 
 ## Rebuild path (Pi side, from scratch)
 
