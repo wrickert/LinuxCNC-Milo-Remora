@@ -41,15 +41,30 @@ if command -v vcgencmd >/dev/null; then
 fi
 
 say "1. Persistent journal"
-# The default image keeps logs in /run, so they vanish on reboot — which is
-# exactly why the 2026-09-04 crash left no evidence. Make them survive.
-if [ ! -d /var/log/journal ]; then
-  sudo mkdir -p /var/log/journal
-  sudo systemd-tmpfiles --create --prefix /var/log/journal
+# 🚨 Raspberry Pi OS deliberately ships
+#      /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf  ->  Storage=volatile
+#    to spare the SD card. Drop-ins apply in FILENAME ORDER, so a drop-in named
+#    10-*.conf loses to it and logs still vanish on reboot. Ours must sort AFTER
+#    40-, hence 99-. Testing for /var/log/journal existing is NOT a valid check:
+#    the directory ships with the image, empty, while journald writes to /run.
+#    That is exactly why the 2026-09-04 crash left no evidence.
+#
+#    Tradeoff, stated honestly: this puts log writes back on the SD card. On a
+#    machine with a marginal supply that is extra exposure during a brownout.
+#    It is enabled anyway because an undiagnosable crash costs more, and the
+#    cap below keeps the volume small. Remove the file to revert.
+JCONF=/etc/systemd/journald.conf.d/99-persistent.conf
+if [ ! -f "$JCONF" ]; then
+  sudo mkdir -p /etc/systemd/journald.conf.d
+  printf '[Journal]\nStorage=persistent\nSystemMaxUse=200M\n' | sudo tee "$JCONF" >/dev/null
   sudo systemctl restart systemd-journald
-  echo "  ✅ journald is now persistent — 'journalctl -b -1' will work after a crash"
+  sudo journalctl --flush || true
+fi
+# Verify by where journald is ACTUALLY writing, not by config or directory.
+if journalctl --header 2>/dev/null | grep -q "^File path: /var/log/journal"; then
+  echo "  ✅ journald is writing to /var/log/journal — 'journalctl -b -1' will survive a crash"
 else
-  echo "  ✅ already persistent"
+  echo "  ⚠️  journald still on /run — check: systemd-analyze cat-config systemd/journald.conf | grep Storage"
 fi
 
 say "2. Timezone"
