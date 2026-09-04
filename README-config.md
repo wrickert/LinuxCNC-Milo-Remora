@@ -210,6 +210,31 @@ exist, however plausible it looks.
 PWM module consumes that index. See the spindle block in `milo.hal` for the matching firmware
 config.
 
+## 🚨 SPI link is NOT currently up (2026-09-04)
+
+`remora.SPI-status` reads **FALSE** with the servo thread running and `SPI-enable` set — so
+rp1lib initialises and claims the pins, but no valid packets come back. **Not a clock problem:**
+tested at 20 MHz, 10, 5, 2 and 1 MHz, false at every one.
+
+Cause cannot be determined remotely. Candidates, all physical:
+1. The SPI ribbon is not connected (the machine has been apart for months).
+2. The Octopus's microSD is out — Remora halts without `config.txt`.
+3. The Octopus is not adequately powered. It is fed from the Pi, which is browning out.
+4. The firmware is not running for some other reason.
+
+**Also learned:** `SPI_clk_div` is accepted but ignored — BAUDR stayed 20 MHz for 10/32/64/128.
+`SPI_freq` is the parameter that works. `milo.hal` now uses `SPI_freq=2000000`.
+
+### 🔌 Get a USB cable onto the Octopus
+
+The single highest-value change to this setup. Remora prints its whole boot sequence over the
+STM32's USB serial — `1. Reading json configuration file`, `3. Parsing json configuration file`,
+then a `Creating ...` line per module. Those strings are in the flashed binary.
+
+With no USB console we are blind: we cannot tell a dead board from an unwired ribbon from a
+config the firmware rejected. With one, every question above is answered in five seconds, and it
+is also how the new `config.txt` gets validated (a mistyped key shows up there and nowhere else).
+
 ## Current build state (2026-09-04)
 
 **Pi:** `192.168.1.42`, hostname `milo`, user `cnc`, desktop key authorised.

@@ -35,13 +35,15 @@ loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JO
 # PRU_base_freq MUST match the base frequency compiled into the Remora firmware
 # on the Octopus (configuration.h). Stock is 40 kHz. Changing it here alone does
 # not change the firmware — it only tells the component what the firmware does.
-# SPI_clk_div: start conservative, raise only once motion is proven, and back it
-# off again at the first sign of "SPI comms error" in dmesg.
-# Verify both parameter names against your Remora version's docs before relying
-# on them — they have changed between releases.
+# 🚨 USE SPI_freq, NOT SPI_clk_div. Tested on the bench 2026-09-04: SPI_clk_div
+#    is accepted but IGNORED — BAUDR stayed at 20 MHz for values 10/32/64/128.
+#    SPI_freq does take effect (verified 10 M / 5 M / 2 M / 1 M).
+#    Default with no parameter is 20 MHz, which is fast for a ribbon.
+#    Start at 2 MHz; raise only once motion is proven, and back it off at the
+#    first sign of SPI comms trouble.
 # 40000 is CONFIRMED: PRU_BASEFREQ in Remora-OS6/configuration.h, and
 # octopus/config.txt has no "Threads" override.
-loadrt remora-spi SPI_clk_div=32 PRU_base_freq=40000
+loadrt remora-spi SPI_freq=2000000 PRU_base_freq=40000
 
 addf remora.read            servo-thread
 addf motion-command-handler servo-thread
