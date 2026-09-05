@@ -119,25 +119,48 @@ cat <<'EOF'
   The SPI link is NOT verified by this script. To test it:
 
       cat > /tmp/spitest.hal <<'HAL'
-      loadrt remora-spi SPI_freq=2000000
+      loadrt remora-spi SPI_freq=2000000 PRU_base_freq=40000
       loadrt threads name1=servo period1=1000000
       addf remora.read servo
       addf remora.write servo
       setp remora.SPI-enable 1
+      setp remora.SPI-reset 0
       start
-      loadusr -w sleep 4
+      loadusr -w sleep 1
+      setp remora.SPI-reset 1
+      loadusr -w sleep 3
       show pin remora.SPI-status
       HAL
       halrun -f /tmp/spitest.hal
 
+  *** THE RISING EDGE ON SPI-reset IS MANDATORY. ***
+  remora-spi.c gates the transfer on:
+
+      if (SPIenable)
+        if ( (SPIreset && !SPIresetOld) || SPIstatus )
+            spi_transfer();
+
+  SPIstatus starts FALSE, so a rising edge on SPI-reset is the ONLY thing
+  that can trigger the first transfer. Setting SPI-enable alone calls
+  spi_transfer() exactly never - the component sits silent, puts nothing on
+  the wire, and SPI-status reads FALSE no matter how perfect the hardware is.
+
+  An earlier version of this very test omitted the reset edge. It produced
+  false "link is down" readings on 2026-09-04/05 and sent us chasing ribbon
+  cables, board power and the microSD for two days. The link was fine.
+
+  In milo.hal the edge comes from iocontrol.0.user-request-enable, i.e. it is
+  generated when you enable the machine in LinuxCNC. Standalone tests have to
+  supply it by hand.
+
   remora.SPI-status TRUE  = link up.
-  remora.SPI-status FALSE = no valid packets coming back. Check, in order:
-      1. the SPI ribbon is actually plugged in
-      2. the Octopus's microSD is inserted (Remora halts without config.txt)
+  remora.SPI-status FALSE = no valid packets. Check, in order:
+      0. that you actually pulsed SPI-reset (see above - this is #1 by far)
+      1. the SPI ribbon is plugged in
+      2. the Octopus's microSD is inserted (config.txt)
       3. the Octopus has adequate power
-      4. Pi GPIO 25 (header pin 22) -> Octopus PC_15 reset wire
-  Do NOT chase the clock: SPI_clk_div is accepted and silently ignored, and
-  the link was proven false at 20/10/5/2/1 MHz on 2026-09-04.
+      4. Pi GPIO 25 (header pin 22) -> Octopus PC_15 (EXP2-7)
+  Do NOT chase the clock: SPI_clk_div is accepted and silently ignored.
 EOF
 
 say "Done"

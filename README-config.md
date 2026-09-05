@@ -229,17 +229,57 @@ exist, however plausible it looks.
 PWM module consumes that index. See the spindle block in `milo.hal` for the matching firmware
 config.
 
-## 🚨 SPI link is NOT currently up (2026-09-04)
+## ✅ SPI LINK IS UP (2026-09-05) — the "link is down" finding was a broken test
 
-`remora.SPI-status` reads **FALSE** with the servo thread running and `SPI-enable` set — so
-rp1lib initialises and claims the pins, but no valid packets come back. **Not a clock problem:**
-tested at 20 MHz, 10, 5, 2 and 1 MHz, false at every one.
+`remora.SPI-status` reads **TRUE**, repeatably, and the Octopus's own serial output confirms the
+handshake from its side: `## Entering RESET state` → `Resetting rxBuffer` → `## Entering RUNNING
+state`. **The hardware was never the problem.**
 
-Cause cannot be determined remotely. Candidates, all physical:
+🚨 **The test was wrong.** `remora-spi.c` gates the transfer like this:
+
+```c
+if (*(data->SPIenable))
+    if( (*(data->SPIreset) && !(data->SPIresetOld)) || *(data->SPIstatus) )
+        spi_transfer();
+```
+
+`SPIstatus` starts FALSE, so **a rising edge on `SPI-reset` is the only thing that can trigger the
+first transfer.** The old test set `SPI-enable` and nothing else — so `spi_transfer()` was called
+**exactly zero times**, the component put nothing on the wire, and `SPI-status` read FALSE
+regardless of the hardware. Verified directly: with the old test the Octopus's serial line is
+*completely silent*; with a raw `spidev` write it logs `Communication data error`; with the reset
+edge added it goes straight to `RUNNING`.
+
+**Correct standalone test — the reset pulse is mandatory:**
+
+```
+setp remora.SPI-enable 1
+setp remora.SPI-reset 0
+start
+loadusr -w sleep 1
+setp remora.SPI-reset 1      # <-- rising edge. Without this, nothing happens, ever.
+loadusr -w sleep 3
+show pin remora.SPI-status
+```
+
+In `milo.hal` the edge comes from `iocontrol.0.user-request-enable`, i.e. it is generated when you
+enable the machine in LinuxCNC. **Standalone tests must supply it by hand.**
+
+📌 **Cost: two days.** This false negative sent us through ribbon cables, connector pinouts, board
+power, USB, and the microSD — all of which were fine. **Lesson: before trusting a negative result
+from a test, read the code path that produces the signal you are reading.** Everything below this
+line was written while chasing the phantom; it is kept because the hardware findings are real and
+independently useful, but the "link is down" premise behind it was false.
+
+### The old (wrong) diagnosis, kept for the hardware findings
 1. The SPI ribbon is not connected (the machine has been apart for months).
 2. The Octopus's microSD is out — Remora halts without `config.txt`.
 3. The Octopus is not adequately powered. It is fed from the Pi, which is browning out.
 4. The firmware is not running for some other reason.
+
+**All four were disproved.** The boot log shows `Mounting the filesystem... OK`, `Opening
+"/fs/config.txt"... OK`, `Deserialization succeeded`, SPI1 slave + DMA initialised, all three
+stepgens loaded, `## Entering IDLE state`.
 
 **Also learned:** `SPI_clk_div` is accepted but ignored — BAUDR stayed 20 MHz for 10/32/64/128.
 `SPI_freq` is the parameter that works. `milo.hal` now uses `SPI_freq=2000000`.
@@ -443,11 +483,12 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 
 | # | Item | State |
 |---|---|---|
-| 1 | Octopus SPI pins | ✅ Resolved to the connector: `PA_7`/`PA_6`/`PA_5`/`PA_4` = **EXP2-6/1/2/4** → Pi 19/21/23/24. |
+| 1 | Octopus SPI pins | ✅ Resolved **and proven live**: `PA_7`/`PA_6`/`PA_5`/`PA_4` = **EXP2-6/1/2/4** → Pi 19/21/23/24. |
 | 2 | PRU reset wire | ✅ **EXP2-7** (`PC_15`) → Pi pin 22. 🚨 Not EXP2-8, which is the MCU `RST`. |
 | 2b | Octopus power | ✅ **CLOSED 2026-09-05.** Board is powered and its SPI slave responds to CS. The "may be unpowered" theory came from a bad test — see the CS-asserted correction. |
-| 2d | MOSI / SCLK wiring | 🚨 **The live suspect.** Slave is selected but returns only zeros in all 4 SPI modes, i.e. never sees a valid request. In EXP2's even column the order is **2 SCLK · 4 CS · 6 MOSI** — MOSI and SCLK **cross**, and wiring them in order swaps them while leaving CS correct. That reproduces this symptom exactly. |
-| 2c | Serial debug | ⚠️ TFT header `PA_9`/`PA_10` → Pi pins 10/8, GND to 9. Needs `dtoverlay=uart0-pi5`. Highest-value diagnostic still not wired. |
+| 2d | MOSI / SCLK wiring | ✅ **CLOSED 2026-09-05 — wiring was correct all along.** `SPI-status` TRUE and the Octopus reports `RUNNING`. The zeros came from a test that never triggered a transfer. |
+| 2c | Serial debug | ✅ **WORKING 2026-09-05.** TFT `PA_9`/`PA_10` → Pi 10/8. Enable at runtime with `sudo dtoverlay uart0-pi5` (no reboot); persist via `config.txt`. Read: `stty -F /dev/ttyAMA0 115200 raw -echo && cat /dev/ttyAMA0`. **This is what finally broke the case open.** |
+| 2e | Octopus config.txt is STALE | 🚨 **NEW.** Boot log reports `Json config file lenght = 762`; `octopus/config.txt` in this repo is **1944** bytes. The three stepgens match, but the card's config has **no TMC2209 modules and no endstop inputs**. The repo version has never been copied to the Octopus's microSD. |
 | 3 | Endstop inputs | ⚠️ Assigned `PG_6`/`PG_9`/`PG_10` → `remora.input.00/01/02`. Verify pins against silkscreen and polarity in halshow. |
 | 4 | Driver modules | ✅ TMC2209, now configured over UART in `octopus/config.txt`. |
 | 5 | Motor directions | ⚠️ All three were reversed under RRF, but relative to CDYv3 wiring. Expect to negate one or more `SCALE`. Flip the sign in the INI, don't rewire. |
