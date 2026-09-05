@@ -229,6 +229,41 @@ exist, however plausible it looks.
 PWM module consumes that index. See the spindle block in `milo.hal` for the matching firmware
 config.
 
+## ✅✅ FULL STACK WORKING (2026-09-05) — link + drivers, together
+
+For the first time, everything below the machine layer is live at once:
+
+| | Result |
+|---|---|
+| `remora.SPI-status` | **TRUE**, repeatable |
+| Octopus state during test | `## Entering RUNNING state` |
+| `SPI_freq` sweep 100 kHz → 2 MHz | **TRUE at every step** — good margin, no marginal-timing edge |
+| TMC2209 ×3 over UART | `Testing connection to TMC driver...OK` |
+| `config.txt` on the card | 1998 B, `Deserialization succeeded` |
+| Modules loaded | 3 stepgens · 3 TMC2209 · 3 digital inputs · reset pin |
+
+`milo.hal` runs `SPI_freq=2000000`. The sweep shows it works from 100 kHz to 2 MHz, so 2 MHz is a
+conservative choice with headroom rather than a value found at the edge of working.
+
+### 🚨 The MOSI incident — six flying leads is the real lesson
+After the SD-card swap and two rounds of jumper changes, the link failed again. Diagnosis by
+elimination, all from the Pi:
+
+| Line | Verdict | How it proved itself |
+|---|---|---|
+| SCLK | ✅ | board clocked data in and reacted at all |
+| CS | ✅ | MISO tri-stated / drove in step with it |
+| MISO | ✅ | drove low under CS, high-Z when released |
+| **MOSI** | ❌ | the only line that cannot verify itself indirectly |
+
+Symptom was `Communication data error` at **every** clock from 2 MHz down to 100 kHz — which rules
+out noise and loading, both of which are clock-dependent. The board was receiving transactions and
+clocking in zeros. Reseating the MOSI lead (Pi 19 → EXP2-6) fixed it immediately.
+
+📌 **This is the argument for the keyed 2×4 IDC connector over pins 19–26** documented above.
+Six loose dupont leads beside a board you must keep handling is how an afternoon disappears into
+one wire that backed out.
+
 ## ✅ SPI LINK IS UP (2026-09-05) — the "link is down" finding was a broken test
 
 `remora.SPI-status` reads **TRUE**, repeatably, and the Octopus's own serial output confirms the
