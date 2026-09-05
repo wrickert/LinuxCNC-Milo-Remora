@@ -489,10 +489,10 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 | 2d | MOSI / SCLK wiring | ✅ **CLOSED 2026-09-05 — wiring was correct all along.** `SPI-status` TRUE and the Octopus reports `RUNNING`. The zeros came from a test that never triggered a transfer. |
 | 2c | Serial debug | ✅ **WORKING 2026-09-05.** TFT `PA_9`/`PA_10` → Pi 10/8. Enable at runtime with `sudo dtoverlay uart0-pi5` (no reboot); persist via `config.txt`. Read: `stty -F /dev/ttyAMA0 115200 raw -echo && cat /dev/ttyAMA0`. **This is what finally broke the case open.** |
 | 2e | Octopus config.txt is STALE | 🚨 **NEW.** Boot log reports `Json config file lenght = 762`; `octopus/config.txt` in this repo is **1944** bytes. The three stepgens match, but the card's config has **no TMC2209 modules and no endstop inputs**. The repo version has never been copied to the Octopus's microSD. |
-| 3 | Endstop inputs | ⚠️ Assigned `PG_6`/`PG_9`/`PG_10` → `remora.input.00/01/02`. Verify pins against silkscreen and polarity in halshow. |
+| 3 | Endstop inputs | ⚠️ `PG_6`/`PG_9`/`PG_10` = BTT `DIAG0`/`DIAG1`/`DIAG2` (the 3-pin connectors beside motors 0/1/2) → `remora.input.00/01/02`. Pin identity now matches BTT's pinout; **polarity still needs checking in halshow**. |
 | 4 | Driver modules | ✅ TMC2209, now configured over UART in `octopus/config.txt`. |
 | 5 | Motor directions | ⚠️ All three were reversed under RRF, but relative to CDYv3 wiring. Expect to negate one or more `SCALE`. Flip the sign in the INI, don't rewire. |
-| 6 | TMC UART pins | ⚠️ `PC_4`/`PD_11`/`PC_6` from the standard Octopus v1.1 pinout, not Remora docs. **A wrong UART pin fails silently** — the driver keeps its defaults, i.e. StealthChop at the wrong current. Watch the boot output. |
+| 6 | TMC UART pins | ✅ **VERIFIED 2026-09-05** against BTT's own pinout: MOTOR0/1/2 CS = `PC4`/`PD11`/`PC6`, matching the config exactly. 🚨 **Correction: it does NOT fail silently.** `TMC2209::configure()` calls `test_connection()` and prints `Testing connection to TMC driver...OK` or `failed! Likely cause: loose connection / no power`. With serial working you will see it. |
 | 7 | Spindle PWM + enable | ⚠️ Schema known (`SP` / `PWM Pin` / `PWM Max`). Nothing wired yet. |
 | 8 | Spindle at-speed | 🚨 No signal. Without one, G-code plunges before the spindle is up to speed. Needs a VFD "up to frequency" output, or Modbus. |
 | 9 | VFD make/model | 🚨 Still unknown. Decides analog+relay vs Modbus — a fork in the wiring, not a setting. |
