@@ -531,8 +531,8 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 | 5 | Motor directions | ⚠️ All three were reversed under RRF, but relative to CDYv3 wiring. Expect to negate one or more `SCALE`. Flip the sign in the INI, don't rewire. |
 | 6 | TMC UART pins | ✅ **VERIFIED 2026-09-05** against BTT's own pinout: MOTOR0/1/2 CS = `PC4`/`PD11`/`PC6`, matching the config exactly. 🚨 **Correction: it does NOT fail silently.** `TMC2209::configure()` calls `test_connection()` and prints `Testing connection to TMC driver...OK` or `failed! Likely cause: loose connection / no power`. With serial working you will see it. |
 | 7 | Spindle PWM + enable | ⚠️ Schema known (`SP` / `PWM Pin` / `PWM Max`). Nothing wired yet. |
-| 8 | Spindle at-speed | 🚨 No signal. Without one, G-code plunges before the spindle is up to speed. Needs a VFD "up to frequency" output, or Modbus. |
-| 9 | VFD make/model | 🚨 Still unknown. Decides analog+relay vs Modbus — a fork in the wiring, not a setting. |
+| 8 | Spindle at-speed | ✅ **Solved by the Modbus decision** — read actual output frequency from `0220H` and compare against commanded. Real feedback rather than a relay to trust. See [VFD-H100.md](VFD-H100.md). |
+| 9 | VFD make/model | ✅ **IDENTIFIED 2026-09-05: Huanyang H100-1.5C2-1B**, 1.5 kW, 1PH 110 V in, 3PH 0-110 V 0-1000 Hz out. Has `485+`/`485-` ⇒ **Modbus RTU via `mb2hal`** (ships with LinuxCNC, no new deps). Full parameter and register map in **[VFD-H100.md](VFD-H100.md)**. 🚨 Not `hy_vfd` — that is the HY series. 🚨 `F165=3` is **8N1**, not the 8E1 the forums claim. 🚨 Never poll-write `F` parameters: EEPROM wear. ⚠️ Confirm the spindle is 110 V — this drive does not voltage-double. |
 | 10 | Probe / toolsetter | ⏸ Deliberately last. Both existed under RRF. |
 | 11 | RT flavour | 🚨 See above. Blocked on the loaded latency test. |
 
