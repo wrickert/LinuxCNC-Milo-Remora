@@ -313,6 +313,71 @@ plugged one pin over, it keeps the run short, and the ribbon's conductor order i
 ground stays next to the clock. Short and keyed is itself most of the EMI mitigation — see the
 spindle-cable warning above.
 
+### ✅ The Octopus side, resolved to the physical connector (2026-09-05)
+
+Every SPI signal is on **EXP2**, one 2×5 header. This closes the gap where the repo knew the
+STM32 pin names but not which connector they lived on.
+
+| Signal | Pi GPIO | Pi pin | Octopus pin | STM32 | Wire |
+|---|---|---|---|---|---|
+| MOSI | GPIO 10 | 19 | **EXP2-6** | `PA_7` | red |
+| MISO | GPIO 9 | 21 | **EXP2-1** | `PA_6` | orange |
+| SCLK | GPIO 11 | 23 | **EXP2-2** | `PA_5` | green |
+| CE0 | GPIO 8 | 24 | **EXP2-4** | `PA_4` | yellow |
+| PRU reset | GPIO 25 | 22 | **EXP2-7** | `PC_15` | brown |
+| GND | — | 25 | **EXP2-9** | GND | black |
+
+Full EXP2, odd pins left: `1 PA6 · 2 PA5 · 3 PB1 · 4 PA4 · 5 PB2 · 6 PA7 · 7 PC15 · 8 RST ·
+9 GND · 10 PC5`. Pins 3, 5, 8, 10 unused.
+
+🚨 **EXP2-8 is `RST`, the STM32 hardware reset — NOT the PRU reset.** The PRU reset is EXP2-7
+(`PC_15`), physically adjacent. Landing GPIO 25 one row over holds the MCU in reset, and the
+symptom is **indistinguishable from a dead link**: rp1lib initialises, claims its pins, nothing
+answers.
+
+✅ **EXP2 carries no 5 V** — pin 10 is `PC5`, so the SPI harness cannot bridge the power domains.
+⚠️ Several widely-copied third-party pin tables claim EXP2-10 is 5 V. BTT's own pinout says
+`PC5`; it is **EXP1** that has 5 V on pin 10. Don't use pin 10 for anything either way.
+
+**Why these pins were free:** BTT labels `PA_7`/`PA_6`/`PA_5` as **Motor-SPI**, the bus for
+SPI-mode drivers (TMC2130/5160). This machine runs TMC2209s in **UART** mode, so the bus is idle
+and Remora gets it. Moving to SPI-mode drivers later would collide with the Remora link.
+
+### 🔌 Serial debug is on the TFT header, not EXP2
+
+The Octopus narrates its whole startup over UART — including whether it accepted `config.txt`.
+**This is the only thing that distinguishes "not powered" from "running but misconfigured",**
+which the Pi side cannot tell apart.
+
+TFT header: `RST · PA10 (RX) · PA9 (TX) · GND · 5V`
+
+| Octopus TFT | Pi pin | Pi function |
+|---|---|---|
+| `PA_10` (RX) | 8 | TXD / GPIO 14 |
+| GND | 9 | GND |
+| `PA_9` (TX) | 10 | RXD / GPIO 15 |
+| 5V | — | **do not connect** |
+
+TX and RX cross. Pi pins 8/9/10 are contiguous — one 3-pin block just above the SPI block.
+
+🚨 **The TFT 5 V pin is the one that can destroy hardware.** Unlike EXP2, this header carries
+5 V, and a stock 4-wire TFT cable includes it. It must never land on the Pi header — the Pi has
+its own supply and a second 5 V source fed into it can kill the board.
+🚨 **And in the other direction:** if the Octopus was being back-fed 5 V through this pin,
+removing the wire leaves it **unpowered**, and the link stays dead however correct the other
+wires are. Power the Octopus from 24 V, or from USB during bench work. Never restore the
+back-feed — that is the arrangement that browned out the Pi on 2026-09-04.
+
+✅ **Pi 5 UART:** `/dev/serial0` → `ttyAMA10`, the dedicated 3-pin debug connector, **not**
+GPIO 14/15. So the kernel console does *not* occupy the header pins and nothing needs freeing —
+GPIO 14/15 just aren't enabled. Add `dtoverlay=uart0-pi5` to `config.txt`, reboot, and read it:
+`stty -F /dev/ttyAMA0 115200 raw -echo && cat /dev/ttyAMA0`
+
+⚠️ **Verify against BTT's pinout, not the silkscreen.** BIGTREETECH's wiki warns that *"the
+silkscreen on the first production run of the octopus had incorrectly labeled pins."* Confirm
+EXP2 pin 1 by the square pad / triangle marker. Source: `BIGTREETECH Octopus - PIN.jpg` in
+`bigtreetech/BIGTREETECH-OCTOPUS-V1.0`, corroborated by the Remora Octopus SPI page.
+
 ## Current build state (2026-09-04)
 
 **Pi:** `192.168.1.42`, hostname `milo`, user `cnc`, desktop key authorised.
@@ -353,8 +418,10 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 
 | # | Item | State |
 |---|---|---|
-| 1 | Octopus SPI pins | ✅ `PA_7`/`PA_6`/`PA_5`/`PA_4` → Pi 19/21/23/24. Link proven working. |
-| 2 | PRU reset wire | ⚠️ Pi GPIO 25 (pin 22) → Octopus `PC_15`. Schema known; **wire not confirmed present**. |
+| 1 | Octopus SPI pins | ✅ Resolved to the connector: `PA_7`/`PA_6`/`PA_5`/`PA_4` = **EXP2-6/1/2/4** → Pi 19/21/23/24. |
+| 2 | PRU reset wire | ✅ **EXP2-7** (`PC_15`) → Pi pin 22. 🚨 Not EXP2-8, which is the MCU `RST`. |
+| 2b | Octopus power | 🚨 **The open question.** EXP2 has no 5 V, so if the board was back-fed through the TFT 5 V pin, pulling that wire leaves it dead. Confirm 24 V or USB before any link test. |
+| 2c | Serial debug | ⚠️ TFT header `PA_9`/`PA_10` → Pi pins 10/8, GND to 9. Needs `dtoverlay=uart0-pi5`. Highest-value diagnostic still not wired. |
 | 3 | Endstop inputs | ⚠️ Assigned `PG_6`/`PG_9`/`PG_10` → `remora.input.00/01/02`. Verify pins against silkscreen and polarity in halshow. |
 | 4 | Driver modules | ✅ TMC2209, now configured over UART in `octopus/config.txt`. |
 | 5 | Motor directions | ⚠️ All three were reversed under RRF, but relative to CDYv3 wiring. Expect to negate one or more `SCALE`. Flip the sign in the INI, don't rewire. |

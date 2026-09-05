@@ -388,23 +388,63 @@
 
   <section>
     <h2>Pi&nbsp;5 &#8594; Octopus, over SPI</h2>
-    <p>The Pi side is fixed and known. The Octopus side is not, and I won't invent it.</p>
+    <p>Both sides are now resolved down to the physical connector. Every SPI signal lands on <strong>EXP2</strong>, a single 2&#215;5 header.</p>
 
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Signal</th><th>Pi 5 GPIO</th><th>Header pin</th><th>Octopus</th></tr></thead>
+        <thead><tr><th>Signal</th><th>Pi 5 GPIO</th><th>Pi header pin</th><th>Octopus pin</th><th>STM32</th><th>Wire</th></tr></thead>
         <tbody>
-          <tr><td class="m">MOSI</td><td class="m">GPIO 10</td><td class="m">19</td><td class="m">PA_7</td></tr>
-          <tr><td class="m">MISO</td><td class="m">GPIO 9</td><td class="m">21</td><td class="m">PA_6</td></tr>
-          <tr><td class="m">SCLK</td><td class="m">GPIO 11</td><td class="m">23</td><td class="m">PA_5</td></tr>
-          <tr><td class="m">SSEL / CE0</td><td class="m">GPIO 8</td><td class="m">24</td><td class="m">PA_4</td></tr>
-          <tr><td class="m">GND</td><td class="m">&#8212;</td><td class="m">20</td><td class="m">any GND</td></tr>
-          <tr><td class="m">PRU reset</td><td class="m">GPIO 25</td><td class="m">22</td><td class="m">PC_15</td></tr>
+          <tr><td class="m">MOSI</td><td class="m">GPIO 10</td><td class="m">19</td><td class="m">EXP2-6</td><td class="m">PA_7</td><td class="m">red</td></tr>
+          <tr><td class="m">MISO</td><td class="m">GPIO 9</td><td class="m">21</td><td class="m">EXP2-1</td><td class="m">PA_6</td><td class="m">orange</td></tr>
+          <tr><td class="m">SCLK</td><td class="m">GPIO 11</td><td class="m">23</td><td class="m">EXP2-2</td><td class="m">PA_5</td><td class="m">green</td></tr>
+          <tr><td class="m">SSEL / CE0</td><td class="m">GPIO 8</td><td class="m">24</td><td class="m">EXP2-4</td><td class="m">PA_4</td><td class="m">yellow</td></tr>
+          <tr><td class="m">PRU reset</td><td class="m">GPIO 25</td><td class="m">22</td><td class="m">EXP2-7</td><td class="m">PC_15</td><td class="m">brown</td></tr>
+          <tr><td class="m">GND</td><td class="m">&#8212;</td><td class="m">25</td><td class="m">EXP2-9</td><td class="m">GND</td><td class="m">black</td></tr>
         </tbody>
       </table>
     </div>
 
-    <p><strong>This link is already up and passing traffic</strong> — so the Octopus side is settled in hardware, it just isn't written down yet. The authoritative record is the <span class="mono">config.json</span> on the Octopus: it names every STM32 pin Remora is using, and BTT's pinout maps those to physical headers. Capture it before it becomes something only the machine knows.</p>
+    <p>Full EXP2 pinout, odd pins in the left column: <span class="mono">1 PA6 &middot; 2 PA5 &middot; 3 PB1 &middot; 4 PA4 &middot; 5 PB2 &middot; 6 PA7 &middot; 7 PC15 &middot; 8 RST &middot; 9 GND &middot; 10 PC5</span>. Pins 3, 5, 8 and 10 are unused here.</p>
+
+    <div class="callout">
+      <span class="ch">Pin 8 is not the PRU reset</span>
+      <p><strong>EXP2-8 is <span class="mono">RST</span>, the STM32's hardware reset. The PRU reset is EXP2-7 (<span class="mono">PC_15</span>).</strong> They are physically adjacent. Landing GPIO&nbsp;25 one row over holds the whole MCU in reset — and the symptom is indistinguishable from a dead link: rp1lib initialises cleanly, claims its pins, and nothing ever answers.</p>
+      <p><strong>EXP2 carries no 5&nbsp;V at all</strong> — pin 10 is <span class="mono">PC5</span>. (Several widely-copied third-party pin tables say 5&nbsp;V; BTT's own pinout says PC5. It is EXP1 that has 5&nbsp;V on pin 10.) So the SPI harness cannot bridge the two power domains, which is one fewer thing to get wrong.</p>
+    </div>
+
+    <h3>Why these pins were free</h3>
+    <p>BTT labels <span class="mono">PA_7</span>/<span class="mono">PA_6</span>/<span class="mono">PA_5</span> as <strong>Motor-SPI</strong> — the bus for SPI-mode stepper drivers such as the TMC2130 or 5160. This machine runs TMC2209s in <strong>UART</strong> mode, so that bus is idle and Remora gets it. Worth recording: moving to SPI-mode drivers later would collide head-on with the Remora link.</p>
+
+    <h3>Serial debug — on the TFT header, not EXP2</h3>
+    <p>The Octopus narrates its entire startup over UART, including whether it accepted its <span class="mono">config.txt</span>. Those lines are on the <strong>TFT</strong> header: <span class="mono">RST &middot; PA10 (RX) &middot; PA9 (TX) &middot; GND &middot; 5V</span>. This is the fastest way to tell "not powered" from "running but misconfigured", which the Pi side alone cannot distinguish.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Octopus TFT</th><th>Pi header pin</th><th>Pi function</th></tr></thead>
+        <tbody>
+          <tr><td class="m">PA_10 (RX)</td><td class="m">8</td><td class="m">TXD / GPIO 14</td></tr>
+          <tr><td class="m">GND</td><td class="m">9</td><td class="m">GND</td></tr>
+          <tr><td class="m">PA_9 (TX)</td><td class="m">10</td><td class="m">RXD / GPIO 15</td></tr>
+          <tr><td class="m">5V</td><td class="m">&#8212;</td><td class="m">do not connect</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>TX and RX cross over. Pi pins 8, 9 and 10 are contiguous, so this is one 3&#8209;pin block sitting just above the SPI block at 19&#8211;26.</p>
+
+    <div class="callout">
+      <span class="ch">The TFT 5&nbsp;V pin is the one that can destroy something</span>
+      <p>Unlike EXP2, the TFT header <em>does</em> carry 5&nbsp;V, and a stock 4&#8209;wire TFT cable includes it. <strong>It must never land on the Pi header.</strong> The Pi has its own supply; a second 5&nbsp;V source fed into it can kill the board. Cut that wire back or tape it off.</p>
+      <p>It also matters in the other direction: if the Octopus was being back&#8209;fed 5&nbsp;V through this pin, removing the wire leaves it <strong>unpowered</strong>, and the SPI link stays dead however correct the other wires are. Power the Octopus properly from 24&nbsp;V, or from a USB cable during bench work.</p>
+    </div>
+
+    <h3>Enabling the Pi's UART for this</h3>
+    <p>On a Pi&nbsp;5, <span class="mono">/dev/serial0</span> maps to <span class="mono">ttyAMA10</span> — the dedicated 3&#8209;pin debug connector, <em>not</em> GPIO 14/15. So the kernel console does not occupy the header pins, and freeing them is not necessary. GPIO 14/15 simply are not enabled by default; add <span class="mono">dtoverlay=uart0-pi5</span> to <span class="mono">config.txt</span> and reboot to get <span class="mono">/dev/ttyAMA0</span>. Read it with <span class="mono">stty -F /dev/ttyAMA0 115200 raw -echo &amp;&amp; cat /dev/ttyAMA0</span>.</p>
+
+    <div class="callout note">
+      <span class="ch">Verify against BTT's pinout, not the silkscreen</span>
+      <p>BIGTREETECH's own wiki warns that <em>"the silkscreen on the first production run of the octopus had incorrectly labeled pins."</em> Confirm EXP2 pin 1 by the square pad or the triangle marker, and trust the pinout image in the hardware repo over what is printed on the board.</p>
+    </div>
 
     <div class="callout">
       <span class="ch">EMI &#8212; this one bites late</span>
