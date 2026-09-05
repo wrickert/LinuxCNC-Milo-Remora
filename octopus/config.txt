@@ -80,7 +80,8 @@
 		"Comment":			"X min endstop  -> remora.input.0",
 		"Pin":				"PG_6",
 		"Mode":				"Input",
-		"Data Bit":			0
+		"Data Bit":			0,
+		"Modifier":		"Pull Up"
 	},
 	{
 	"Thread": "Servo",
@@ -88,7 +89,8 @@
 		"Comment":			"Y max endstop  -> remora.input.1",
 		"Pin":				"PG_9",
 		"Mode":				"Input",
-		"Data Bit":			1
+		"Data Bit":			1,
+		"Modifier":		"Pull Up"
 	},
 	{
 	"Thread": "Servo",
@@ -96,7 +98,8 @@
 		"Comment":			"Z max endstop  -> remora.input.2",
 		"Pin":				"PG_10",
 		"Mode":				"Input",
-		"Data Bit":			2
+		"Data Bit":			2,
+		"Modifier":		"Pull Up"
 	}
 	]
 }
