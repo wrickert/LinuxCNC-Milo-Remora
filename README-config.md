@@ -253,7 +253,32 @@ ran — only the Pi's supply had been changed. A FALSE reading with the ribbon p
 is not a data point. **Before any future link test, confirm the ribbon is on and the Octopus is
 powered**, or the result is unfalsifiable.
 
-### 🔍 The MISO pull-up test — tells you which side is silent
+### 🚨 CORRECTION 2026-09-05: the MISO pull test below is only valid with CS ASSERTED
+
+**The version of this test described below is wrong, and it cost a day.** It was run with chip
+select idle-high — and a *healthy* SPI slave tri-states MISO whenever it is not selected. So a
+floating MISO proved nothing, and the conclusions drawn from it ("nothing is driving MISO", "the
+fault is physical", "the Octopus may be unpowered") were all unfounded. The board was alive the
+whole time.
+
+**Always assert CS before judging MISO:**
+
+```sh
+pinctrl set 8 op dl                      # assert CS (GPIO 8) low
+pinctrl set 9 ip pu && pinctrl get 9     # MISO with pull-up
+pinctrl set 9 ip pd && pinctrl get 9     # MISO with pull-down
+pinctrl set 8 a0 && pinctrl set 9 a0     # RESTORE both to SPI0
+```
+
+| Reading | Meaning |
+|---|---|
+| CS low → MISO `lo` under a **pull-up**; CS high → follows the pull | ✅ **Slave is alive and correctly selected.** Only a live slave does this. |
+| Follows the pull in **both** CS states | Nothing driving — then it really is power/ribbon/reset. |
+
+Measured 2026-09-05 with the board powered: `lo` under pull-up with CS asserted, high-Z with CS
+released. **The Octopus is alive, its SPI slave is configured, and CS is on the right pin.**
+
+### 🔍 The original MISO pull test (kept for the reasoning — see the correction above)
 
 Worth knowing because it separates "nothing is connected" from "connected but not talking",
 which the `SPI-status` bit alone cannot:
@@ -420,7 +445,8 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 |---|---|---|
 | 1 | Octopus SPI pins | ✅ Resolved to the connector: `PA_7`/`PA_6`/`PA_5`/`PA_4` = **EXP2-6/1/2/4** → Pi 19/21/23/24. |
 | 2 | PRU reset wire | ✅ **EXP2-7** (`PC_15`) → Pi pin 22. 🚨 Not EXP2-8, which is the MCU `RST`. |
-| 2b | Octopus power | 🚨 **The open question.** EXP2 has no 5 V, so if the board was back-fed through the TFT 5 V pin, pulling that wire leaves it dead. Confirm 24 V or USB before any link test. |
+| 2b | Octopus power | ✅ **CLOSED 2026-09-05.** Board is powered and its SPI slave responds to CS. The "may be unpowered" theory came from a bad test — see the CS-asserted correction. |
+| 2d | MOSI / SCLK wiring | 🚨 **The live suspect.** Slave is selected but returns only zeros in all 4 SPI modes, i.e. never sees a valid request. In EXP2's even column the order is **2 SCLK · 4 CS · 6 MOSI** — MOSI and SCLK **cross**, and wiring them in order swaps them while leaving CS correct. That reproduces this symptom exactly. |
 | 2c | Serial debug | ⚠️ TFT header `PA_9`/`PA_10` → Pi pins 10/8, GND to 9. Needs `dtoverlay=uart0-pi5`. Highest-value diagnostic still not wired. |
 | 3 | Endstop inputs | ⚠️ Assigned `PG_6`/`PG_9`/`PG_10` → `remora.input.00/01/02`. Verify pins against silkscreen and polarity in halshow. |
 | 4 | Driver modules | ✅ TMC2209, now configured over UART in `octopus/config.txt`. |
