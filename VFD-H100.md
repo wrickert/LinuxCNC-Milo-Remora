@@ -139,3 +139,70 @@ before Modbus works at all.
 - `mbpoll` (Debian package, not yet installed) for register verification before writing HAL.
 - Which coil/bit combination the drive actually accepts for run — `0049H = FF00` versus `0200H`
   with BIT8 set. The manual gives both forms; test before trusting either.
+
+## ✅ Modbus VERIFIED LIVE on the bench (2026-09-05)
+
+Talking to the drive from the Pi over a CH340/CH341 adapter at **38400 8N1, slave 1**.
+Adapter enumerates as `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`.
+
+All six parameters confirmed **read back from the drive**, not just set:
+
+| Param | Read | Meaning |
+|---|---|---|
+| `F001` | 2 | control mode = communication ✅ |
+| `F002` | 2 | frequency source = communication ✅ |
+| `F163` | 1 | address ✅ |
+| `F164` | 3 | 38400 baud ✅ |
+| `F165` | 3 | **8N1** RTU ✅ |
+| `F169` | 0 | `0201H` in 0.1 Hz units ✅ |
+
+Live state read cleanly: `0210H`=0 (stopped), `0211H`=0, `0220H`=0 (output freq), `0200H`=0,
+`0201H`=0, coils `0000H`–`0007H` all 0.
+
+🚨 **Coils only respond to function 01 (read coils).** Function 02 (read discrete inputs) gets
+**no reply at all**. In `mbpoll` terms that is `-t 0`, not `-t 1`. `mb2hal` must be configured
+accordingly or the status reads will silently never arrive.
+
+⚠️ **The 4-register read limit is real** — keep `mb2hal` transactions to ≤4 registers.
+
+### Frequency limits — already correct
+
+| Param | Raw | Actual | Note |
+|---|---|---|---|
+| `F004` reference frequency | 4000 | **400.0 Hz** | correct for 24000 RPM at 2-pole |
+| `F005` **max operating frequency** | 4000 | **400.0 Hz** | ✅ **not** left at the 50.0 Hz default |
+| `F006` intermediate freq | 5 | 0.5 Hz | |
+| `F007` minimum frequency | 5 | 0.5 Hz | |
+| `F011` lower freq limit | 0 | 0 | |
+
+🚨 **`F005` at its factory default of 50.0 Hz would silently cap the spindle at 3000 RPM.** It is
+correctly set here, but check it on any replacement drive.
+⚠️ `F100` is **"Frequency XVI setting"** — a multi-segment speed preset, **not** a maximum. Do not
+scale RPM off it (reads 450 here, which is meaningless for scaling).
+⚠️ `F003` reads 198.6 Hz but is irrelevant: with `F002=2` the setpoint comes from `0201H`.
+
+### 🚨 OPEN: `F008` maximum voltage reads 380.0 V
+
+`F008` = `3800` ⇒ **380.0 V**, which is the 380 V-class factory default — on a drive whose
+nameplate says `OUTPUT: 3PH 0-110V`. The V/F curve would command 380 V at 400 Hz, be clamped to
+the 110 V the drive can actually produce, and the spindle would run under-volted over most of its
+range (weak and hot, not dangerous).
+
+**Do not change it until the spindle's nameplate is read** — `F008` and the spindle-voltage
+question are the same question:
+- spindle is **110 V** ⇒ set `F008` ≈ `1100`, and drive/spindle match
+- spindle is **220 V** ⇒ wrong drive entirely, and `F008` is the least of it
+
+Other V/F values as found: `F009` intermediate voltage 14.0 V, `F010` low-frequency torque boost
+5.0 %.
+
+### RPM ⇄ register scaling for `mb2hal`
+
+`F169=0` ⇒ `0201H` is in 0.1 Hz units, and 400.0 Hz = 24000 RPM (2-pole), so:
+
+```
+0201H value = RPM / 6          24000 RPM -> 4000 -> 400.0 Hz
+RPM         = 0220H value * 6  (output frequency readback)
+```
+
+`spindle.0.at-speed` = |commanded − actual| within a tolerance, both via that conversion.
