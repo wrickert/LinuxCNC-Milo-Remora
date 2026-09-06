@@ -1,72 +1,70 @@
 #!/bin/bash
 #
-# fetch-gcode.sh — pull CAM/Milo from Nextcloud into ~/gcode on the mill Pi.
+# fetch-gcode.sh — copy CAM/Milo G-code from the Unraid NAS into ~/gcode.
 #
-# WHY A PULL AND NOT A SYNC CLIENT
-# This Pi is a realtime machine controller. The full nextcloud-desktop client
-# runs permanently — Qt GUI, inotify watches, periodic network polling. Adding
-# a persistent background process doing disk and network I/O to a machine that
-# has to hit realtime deadlines buys nothing: the workflow is "CAM at the
-# desktop, walk over, pull the file", which is a pull, not a sync. A daemon
-# that wedges also announces itself as a missing file mid-job; a pull you
-# invoke either works or visibly doesn't.
+# HOW THIS WORKS
+# The desktop does CAM in FreeCAD and saves into its Nextcloud folder, which
+# syncs to the server. This machine reads the resulting files straight off the
+# Unraid share — no Nextcloud client, no app password, no sync daemon.
 #
-# WHY rclone AND NOT nextcloudcmd
-# 🚨 nextcloudcmd is BIDIRECTIONAL. There is no --download-only option (I
-#    assumed one existed; it does not). Under nextcloudcmd anything that
-#    happened to ~/gcode would propagate back to Nextcloud — INCLUDING
-#    DELETIONS. A corrupted or emptied local folder would destroy the CAM
-#    output upstream.
-#    `rclone copy` is strictly one-way: per its own docs it "doesn't delete
-#    files from the destination", and it never writes to the source.
-#    ⚠️ Use `copy`, NEVER `sync` — rclone's `sync` IS destructive.
-# (davfs2 was rejected outright: a WebDAV mount blocks on network loss, and a
-#  blocked filesystem call on a machine controller is a bad failure mode.)
+# 🚨 READING Nextcloud's data directory is safe. WRITING into it is not:
+#    Nextcloud keeps a database index (oc_filecache) and files dropped in
+#    directly stay invisible until `occ files:scan`. The mount is ro precisely
+#    so that mistake cannot be made from here.
 #
-# 🚨 SCOPE IS THE SAFETY FEATURE. This pulls ONLY CAM/Milo. Programs for the
-#    PrintNC or the mill at work are never present on this machine, so G-code
-#    from the wrong post-processor cannot be opened by accident. That is a
-#    structural guarantee, not a habit. Do NOT widen this to CAM/.
+# WHY A LOCAL COPY RATHER THAN OPENING OFF THE MOUNT
+# So the cut is independent of the network. Once a program is in ~/gcode, an
+# NFS hiccup, a NAS reboot or someone unplugging a switch cannot affect a
+# running job. Opening straight off the mount would work, but it puts the
+# workshop network in the path of a machining operation for no benefit.
 #
-# Credentials live in rclone's config with the password obscured, never on the
-# command line — arguments are visible to any user in `ps`.
+# MOUNT OPTIONS THAT MATTER (see /etc/fstab):
+#   ro      the mill physically cannot write upstream — one-way is enforced by
+#           the kernel, not by this script choosing the right rsync flags
+#   soft,timeo=50,retrans=2
+#           errors after ~5s instead of blocking forever. A *hard* NFS mount
+#           (the default) hangs indefinitely on network loss.
+#   x-systemd.automount
+#           mounts on first access; no NFS connection is held while idle.
+#
+# ⚠️ NO --delete. Files removed upstream are left alone here. Stale G-code is
+#    harmless; a program vanishing between loading and running is not.
 #
 set -euo pipefail
 
-REMOTE="milo-nc"          # rclone remote name (see rclone config)
-REMOTE_PATH="CAM/Milo"
-LOCAL="$HOME/gcode"
+SRC="/mnt/nas-data/wrickert/files/CAM/Milo"
+DST="$HOME/gcode"
 
-mkdir -p "$LOCAL"
+mkdir -p "$DST"
 
-if ! rclone listremotes 2>/dev/null | grep -q "^${REMOTE}:"; then
-  echo "ERROR: rclone remote '${REMOTE}' is not configured."
+# Touching the path triggers the automount. If the NAS is down this fails
+# after the soft timeout rather than hanging.
+if ! timeout 20 ls "$SRC" >/dev/null 2>&1; then
+  echo "ERROR: cannot reach $SRC"
   echo
-  echo "Run:  rclone config"
-  echo "    n) new remote      name: ${REMOTE}"
-  echo "    type: webdav"
-  echo "    url:  https://192.168.1.105:4435/remote.php/dav/files/wrickert/"
-  echo "    vendor: nextcloud"
-  echo "    user: wrickert"
-  echo "    pass: <Nextcloud APP password, not the account password>"
+  echo "  Check:  systemctl status mnt-nas\\x2ddata.automount"
+  echo "          findmnt /mnt/nas-data"
+  echo "          ping 192.168.1.105"
   exit 1
 fi
 
-echo "Pulling ${REMOTE}:${REMOTE_PATH}  ->  ${LOCAL}"
+echo "Copying  $SRC"
+echo "     ->  $DST"
 echo
 
-rclone copy "${REMOTE}:${REMOTE_PATH}" "$LOCAL" \
-  --progress \
-  --no-traverse \
-  --transfers 4 \
-  --contimeout 15s \
-  --timeout 60s \
-  --retries 2
+# -r -t : recurse, preserve times (for rsync's own change detection)
+# NOT -a : files on the share are owned by the NFS squash user (99:users) and
+#          this runs as cnc, so preserving ownership would fail. --chmod gives
+#          sane local permissions instead.
+rsync -rt --info=stats1,progress2 \
+  --no-perms --no-owner --no-group \
+  --chmod=F644,D755 \
+  "$SRC/" "$DST/"
 
 echo
-echo "G-code now available in ${LOCAL}:"
-find "$LOCAL" -maxdepth 2 -type f \
+echo "G-code now in $DST:"
+find "$DST" -maxdepth 2 -type f \
   \( -iname '*.ngc' -o -iname '*.nc' -o -iname '*.gcode' -o -iname '*.tap' \) \
   -printf '  %TY-%Tm-%Td %TH:%TM  %8s  %P\n' | sort -r | head -20
 echo
-echo "Open in Axis from: ${LOCAL}"
+echo "Open in Axis from: $DST"
