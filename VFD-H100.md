@@ -222,12 +222,27 @@ coils** are back to `0`.
 | Stop | coil `0049H` = 0 | `-t 0 -r 73 0` |
 | Read actual speed | reg `0220H` (544), units 0.1 Hz | `-t 4 -r 544 -c 1` |
 
+✅ **`0220H` is trustworthy for `at-speed`** — measured 2026-09-06: commanded 1000, it reported
+`0` → `900` → `1000` and held `1000` steady for 10 s, then `0` after stop. It tracks the command
+exactly, so `spindle.0.at-speed` can be real feedback rather than a timer.
+
 📌 **Coil `0049H` (Forward) alone is sufficient to start** — `0048H` (Operation) was not required.
 The manual documents both forms; this is the one that works.
 
-⚠️ **Ramps are slow by design:** `F014` accel = **35.0 s** and `F015` decel = **35.0 s** to reach
-the 400 Hz reference. So 100 Hz takes ~9 s each way. For an immediate stop use the e-stop (which
-interrupts AC into the control box), not the Modbus stop.
+### 🚨 CORRECTION — the ramp is 3.5 s, not 35 s
+
+`F014`/`F015` read **350**, and I first recorded that as **35.0 s** (unit 0.1 s). **That was wrong.**
+The measured spin-up reached 100 Hz in **about 2 seconds**, and the stop took about 2 as well —
+so the unit is **0.01 s** and `350` = **3.50 s** to the 400 Hz reference.
+
+⚠️ **The manual contradicts itself on this.** Its summary table gives the range as `0.1~650.00s`
+(two decimals, which is correct) while the detail section says `0.1~6500.0s` (one decimal). Only
+the machine settles it. Measured behaviour wins.
+
+⇒ At 100 Hz that is **~0.9 s** of ramp, not 9 s. The spindle is at speed **fast**. Do not plan on
+having several seconds to react during spin-up.
+⚠️ For an immediate stop use the **e-stop** (interrupts AC into the control box), not the Modbus
+stop — the Modbus stop still decelerates on the `F015` ramp.
 
 🚨 **Any script that starts the spindle MUST trap its own exit.** `spindle-test.sh` writes the
 stop command on `EXIT INT TERM`, so a crash, a Ctrl-C or a dropped ssh session cannot leave the
