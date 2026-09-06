@@ -100,6 +100,16 @@
 		"Mode":				"Input",
 		"Data Bit":			2,
 		"Modifier":		"Pull Up"
+	},
+
+	{
+	"Thread": "Servo",
+	"Type": "Digital Pin",
+		"Comment":			"Toolsetter -> remora.input.03",
+		"Pin": 				"PG_11",
+		"Mode":				"Input",
+		"Data Bit":			3,
+		"Modifier":		"Pull Up"
 	}
 	]
 }

@@ -169,7 +169,14 @@ net z-home  remora.input.02 => joint.2.home-sw-in
 # TODO(pins)
 ##############################################################################
 
-# net probe-in  remora.input.NN => motion.probe-input     # TODO(wiring)
+# Toolsetter is on STOP3 = PG_11 -> remora.input.03 (config.txt, Data Bit 3).
+# ⚠️ Two digits: remora.input.03, not .3 — a one-digit name silently never binds.
+# ⚠️ VERIFY IN HALSHOW before uncommenting: trigger the toolsetter by hand and
+#    confirm the pin changes state. If it reads inverted, use remora.input.03.not
+#    rather than editing the firmware.
+# ⚠️ LinuxCNC has exactly ONE motion.probe-input. A touch probe added later must
+#    share it — OR'd in HAL, or physically switched. Do not net two sources here.
+# net probe-in  remora.input.03 => motion.probe-input     # TODO(verify polarity)
 
 # --- Tool change (manual) ----------------------------------------------------
 net tool-change     iocontrol.0.tool-change     => iocontrol.0.tool-changed
