@@ -63,14 +63,36 @@ if [ -d "/home/$USER_NAME/Remora" ]; then
   echo "  synced ~/Remora"
 fi
 
-say "5. Confirm the SD's own boot identity is untouched"
+say "5. Spindle VFD udev rule -> SD"
+# Without this the fallback boots with no /dev/milo-vfd, so mb2hal cannot open
+# the port and the spindle silently does not work.
+if [ -f /etc/udev/rules.d/99-milo-vfd.rules ]; then
+  cp /etc/udev/rules.d/99-milo-vfd.rules "$MNT/etc/udev/rules.d/"
+  echo "  copied 99-milo-vfd.rules"
+else
+  echo "  ⚠️  99-milo-vfd.rules not installed on this system - skipped"
+fi
+
+say "6. Ensure the UART overlay is in the SD's config.txt"
+# GPIO 14/15 UART carries the Octopus serial console - the single most useful
+# diagnostic on this machine. It is NOT enabled by default on a Pi 5.
+# Append only if missing; never rewrite the SD's config.txt wholesale.
+SDCFG="$MNT/boot/firmware/config.txt"
+if grep -q "^dtoverlay=uart0-pi5" "$SDCFG" 2>/dev/null; then
+  echo "  already present"
+else
+  echo "dtoverlay=uart0-pi5" >> "$SDCFG"
+  echo "  appended dtoverlay=uart0-pi5"
+fi
+
+say "7. Confirm the SD's own boot identity is untouched"
 echo "  --- SD /etc/fstab ---"
 grep PARTUUID "$MNT/etc/fstab" || true
 echo "  --- SD cmdline.txt root= ---"
 tr ' ' '\n' < "$MNT/boot/firmware/cmdline.txt" | grep '^root=' || true
 echo "  (both must say b3a878db-* — if they say anything else, do NOT reboot on this card)"
 
-say "6. Unmount"
+say "8. Unmount"
 sync
 umount "$MNT/boot/firmware"
 umount "$MNT"
