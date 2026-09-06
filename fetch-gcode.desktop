@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Fetch G-code
+GenericName=Pull CAM/Milo from Nextcloud
+Comment=One-way pull of CAM/Milo into ~/gcode. Never uploads, never deletes upstream.
+Exec=bash -c "$HOME/fetch-gcode.sh; echo; read -n1 -r -p 'Press any key to close...'"
+Icon=folder-download
+Terminal=true
+StartupNotify=true
+Categories=X-CNC;Utility;
+Keywords=gcode;cam;nextcloud;milo;
