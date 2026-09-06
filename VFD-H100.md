@@ -257,3 +257,33 @@ spindle running. Do not write a spindle script without this.
 ### Next: wire it into HAL with `mb2hal`
 `0220H` gives real output frequency, so `spindle.0.at-speed` becomes genuine feedback rather than
 a timer. RPM ⇄ register: `0201H = RPM / 6`, and `RPM = 0220H * 6` (400.0 Hz = 24000 RPM).
+
+## ✅✅ SPINDLE FULLY INTEGRATED INTO LINUXCNC (2026-09-06)
+
+`M3 S6000` from MDI, watched live in HAL:
+
+```
+time      on     cmd RPM  reg out  actual RPM  at-speed  errs
+12:01:42  FALSE  0        0        0           TRUE      0/0   <- idle
+12:02:25  TRUE   6000     1000     0           FALSE     0/0   <- M3: drops instantly
+12:02:26  TRUE   6000     1000     2106        FALSE     0/0
+12:02:26  TRUE   6000     1000     5394        FALSE     0/0
+12:02:27  TRUE   6000     1000     6000        TRUE      0/0   <- reached speed
+```
+
+Verified by that single run:
+- **Scaling both ways** — 6000 RPM → register `1000` (÷6), and feedback reads back **exactly 6000**
+- **`at-speed` is real feedback** — FALSE the instant `M3` is issued, TRUE only when the drive
+  confirms it arrived. Unwired it defaults TRUE, which is why G-code would otherwise plunge into
+  stationary metal.
+- **Zero Modbus errors** on both transactions throughout
+- **~2 s ramp**, consistent with the corrected `F014` = 3.50 s figure
+
+### Setup gotchas worth not rediscovering
+1. **`mb2hal` cannot open `/dev/serial/by-id/...`** — 49-char path, fixed-size buffers, fails with
+   `cannot connect to link, ret[-1] fd[-1]`. `mbpoll` opens the same path fine, which is what
+   isolated it. Use the short symlink from `99-milo-vfd.rules` → `/dev/milo-vfd`.
+2. **`linuxcnc_debug.txt` is not truncated between runs.** Errors in it may be from a *previous*
+   attempt. Check its mtime against the clock, or `: > ~/linuxcnc_debug.txt` before testing.
+3. **`deploy.sh` catches hand-edits on the Pi.** A `sed` made there during testing survived until
+   the next deploy overwrote it — which is the point of the repo being the source of truth.
