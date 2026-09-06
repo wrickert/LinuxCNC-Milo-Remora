@@ -674,9 +674,12 @@ converts to exactly 200/200/400 at 8; the config says the same; and the machine 
 
 ⏭ Next: homing. Note `HOME_SEQUENCE` puts **Z first** (Z=0, X=Y=1), which is the safe order —
 Z retracts upward away from the table before X and Y move.
-🚨 **Until homing succeeds there is still no travel protection**: endstops are netted to
+⚠️ **Until homing succeeds, JOGGING has no travel protection**: endstops are netted to
 `joint.N.home-sw-in` only, not to limit pins, so they do **not** stop a jog; and soft limits do
 not apply to an unhomed machine.
+✅ **But LinuxCNC refuses MDI and AUTO on an unhomed machine** (`NO_FORCE_HOMING` deliberately not
+set), so a *program* cannot be driven into a hard stop. **The exposure is manual jogging only** —
+see the correction at the end of this file.
 
 ## ✅ HOMING WORKS — soft limits now active (2026-09-06)
 
@@ -692,11 +695,11 @@ The 0.01 mm is latch residual — two steps at 200 steps/mm, i.e. inside the mac
 Zero drift includes **Z under gravity**, which was the one worth checking: a vertical axis that
 sags at standstill would show up here and does not.
 
-🎉 **Soft limits are live from this point.** Until homing succeeded there was *no* travel
-protection at all — endstops are netted to `joint.N.home-sw-in` only, not limit pins, so they
-never stopped a jog, and `[AXIS_*]` limits do not apply to an unhomed machine. That caveat is now
-retired for normal operation, but **it returns every time the machine is powered on and not yet
-homed.**
+🎉 **Soft limits are live from this point.** Before homing, *jogging* had no travel protection —
+endstops are netted to `joint.N.home-sw-in` only, not limit pins, so they never stopped a jog, and
+`[AXIS_*]` limits do not apply to an unhomed machine. ⚠️ **That returns every power-on until
+homing completes** — but it only ever applied to jogging: LinuxCNC blocks MDI and AUTO entirely
+until homed, so a program was never at risk. See the correction at the end of this file.
 
 ### What made homing work
 1. **Search speeds cut to ~30% of each joint's `MAX_VELOCITY`** (was 30.0 across the board, an
