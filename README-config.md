@@ -531,7 +531,7 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 | 3a | ✅ Endstops VERIFIED LIVE | **2026-09-06.** All three triggered by hand with the link up: X, Y and Z each read **FALSE at rest, TRUE when pressed**, returning to FALSE on release. **No `Invert`, no `.not` pins needed** — `milo.hal`'s existing `remora.input.00/01/02 -> joint.N.home-sw-in` block is correct as written. Toolsetter (`input.03`) reads TRUE while disconnected, which is the fail-safe working. |
 | 3 | Endstop inputs | ⏸ **Not wired to the mill yet** (2026-09-05), so `remora.input.00/01/02` will read noise until they are. Pins `PG_6`/`PG_9`/`PG_10` = BTT `DIAG0/1/2`. ✅ Config now sets `"Modifier": "Pull Up"` — RRF used `M574 ... S1`, i.e. **switch-type** endstops, which need a pull-up to work against. Without it the firmware logs `Setting pin as No Pull` and the inputs float. ⚠️ `Invert` still unset: determine NO-vs-NC empirically in halshow once wired. |
 | 4 | Driver modules | ✅ **PROVEN LIVE 2026-09-05** — all three TMC2209s answer over UART (`test_connection()` OK), configured from `octopus/config.txt` at 8 microsteps, 1200/1200/900 mA. `SCALE` in `milo.ini` now agrees with the hardware by construction. |
-| 5 | Motor directions | ⚠️ All three were reversed under RRF, but relative to CDYv3 wiring. Expect to negate one or more `SCALE`. Flip the sign in the INI, don't rewire. |
+| 5 | Motor directions | ✅ **CLOSED 2026-09-06.** All three ran backwards on first jog, exactly as `M569 P0/P1/P2 S0` predicted. Fixed by negating `SCALE` → **-200 / -200 / -400**. Re-jogged: all three now correct. |
 | 6 | TMC UART pins | ✅ **VERIFIED 2026-09-05** against BTT's own pinout: MOTOR0/1/2 CS = `PC4`/`PD11`/`PC6`, matching the config exactly. 🚨 **Correction: it does NOT fail silently.** `TMC2209::configure()` calls `test_connection()` and prints `Testing connection to TMC driver...OK` or `failed! Likely cause: loose connection / no power`. With serial working you will see it. |
 | 7 | Spindle PWM + enable | ⚠️ Schema known (`SP` / `PWM Pin` / `PWM Max`). Nothing wired yet. |
 | 8 | Spindle at-speed | ✅ **Solved by the Modbus decision** — read actual output frequency from `0220H` and compare against commanded. Real feedback rather than a relay to trust. See [VFD-H100.md](VFD-H100.md). |
@@ -653,3 +653,27 @@ hours, suspect the image before suspecting your config.
    10 mm — and it will be wrong by an exact ratio, which tells you the microstep
    mismatch immediately.
 4. Only then home an axis, and keep a hand on the e-stop the first time.
+
+## ✅ MOTION VALIDATED (2026-09-06)
+
+First real motion on the LinuxCNC/Remora stack.
+
+| Check | Result |
+|---|---|
+| All three axes move | ✅ |
+| Direction | ✅ correct after negating `SCALE` |
+| Commanded 10 mm → measured | ✅ **≈10 mm** |
+
+📌 **Why the 10 mm check settles the microstepping question.** A jumper/UART mismatch is never
+subtle — 16 microsteps against a `SCALE` written for 8 gives a clean factor-of-two error (5 mm or
+20 mm), not a near miss. Landing on ≈10 mm confirms the drivers are genuinely at the **8
+microsteps** the TMC UART config set, and that `SCALE = 200/200/400` is correct.
+
+That is now **three independent agreements**: RRF's `M92 X800 Y800 Z1600` at 32 microsteps
+converts to exactly 200/200/400 at 8; the config says the same; and the machine measures it.
+
+⏭ Next: homing. Note `HOME_SEQUENCE` puts **Z first** (Z=0, X=Y=1), which is the safe order —
+Z retracts upward away from the table before X and Y move.
+🚨 **Until homing succeeds there is still no travel protection**: endstops are netted to
+`joint.N.home-sw-in` only, not to limit pins, so they do **not** stop a jog; and soft limits do
+not apply to an unhomed machine.
