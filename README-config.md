@@ -727,3 +727,36 @@ So the accurate picture:
 🚨 **Do NOT set `NO_FORCE_HOMING = 1`.** It would remove the one interlock that makes the above
 true, in exchange for convenience that is worth nothing here. Leaving it unset is what confines
 the hazard to jogging.
+
+## 🌡 Cooling — the Pi needs a fan (2026-09-06)
+
+Found running at **73–74 °C** with **no cooling device present** (`/sys/class/thermal/` listed a
+single zone and nothing else). All four sticky throttle flags were set — `0xf0000` = under-voltage,
+frequency capping, throttling **and** the soft temperature limit had each occurred during a 4½-hour
+uptime.
+
+**This matters more here than on a desktop.** Thermal throttling varies the CPU clock, and a
+varying clock is exactly what destroys realtime determinism on a machine servicing a 1 kHz servo
+thread while cutting.
+
+A fan was fitted, powered from one of the Octopus's always-on fan ports:
+
+| | Before | After |
+|---|---|---|
+| Temperature | 73–74 °C | **42–44 °C** |
+| Headroom to the 80 °C soft limit | 6 °C | **37 °C** |
+
+⚠️ **The fan runs only while the Octopus is powered.** The Pi routinely runs with the Octopus off —
+config work, LinuxCNC before the machine is energised, everything done over ssh. In that window
+there is no cooling. The Pi 5 has its own 4-pin fan header (`cooling_fan` **is** present in the
+device tree, nothing attached), which is firmware-managed by temperature and gives tacho feedback;
+moving the fan there later removes the coupling entirely.
+
+🚨 **Run the loaded latency test only after a reboot with the fan running.** The sticky throttle
+flags clear only on reboot, and a latency test taken while thermally throttling measures the
+cooling rather than the kernel — which would send the still-open RT-flavour question down a false
+trail.
+
+⚠️ Also noticed: a **web browser was running on the controller** (`x-www-browser` plus an isolated
+content process). That is the largest avoidable background load on a machine that should be doing
+one job — and the same failure class as the Chromium leak that wedged the dashboard panel.
