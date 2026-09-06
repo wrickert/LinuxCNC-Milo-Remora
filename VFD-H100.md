@@ -206,3 +206,39 @@ RPM         = 0220H value * 6  (output frequency readback)
 ```
 
 `spindle.0.at-speed` = |commanded − actual| within a tolerance, both via that conversion.
+
+## ✅ FIRST SPIN-UP — spindle runs and stops over Modbus (2026-09-06)
+
+The spindle spun under Modbus control and stopped cleanly. Verified stopped afterwards: `0200H`
+control bits, `0201H` setpoint, `0210H` status, `0220H` output frequency and **all eight status
+coils** are back to `0`.
+
+**Working command set (confirmed on hardware):**
+
+| Action | Modbus | mbpoll |
+|---|---|---|
+| Set speed | reg `0201H` (513), units 0.1 Hz | `-t 4 -r 513 <hz*10>` |
+| Start forward | coil `0049H` (73) | `-t 0 -r 73 1` |
+| Stop | coil `0049H` = 0 | `-t 0 -r 73 0` |
+| Read actual speed | reg `0220H` (544), units 0.1 Hz | `-t 4 -r 544 -c 1` |
+
+📌 **Coil `0049H` (Forward) alone is sufficient to start** — `0048H` (Operation) was not required.
+The manual documents both forms; this is the one that works.
+
+⚠️ **Ramps are slow by design:** `F014` accel = **35.0 s** and `F015` decel = **35.0 s** to reach
+the 400 Hz reference. So 100 Hz takes ~9 s each way. For an immediate stop use the e-stop (which
+interrupts AC into the control box), not the Modbus stop.
+
+🚨 **Any script that starts the spindle MUST trap its own exit.** `spindle-test.sh` writes the
+stop command on `EXIT INT TERM`, so a crash, a Ctrl-C or a dropped ssh session cannot leave the
+spindle running. Do not write a spindle script without this.
+
+### Spindle / machine facts
+- **Air-cooled** — no coolant interlock needed (a water-cooled spindle would have required the
+  pump proven running before any spin-up).
+- Physical stop is an **e-stop interrupting AC into the control box** — independent of the serial
+  link and of any software.
+
+### Next: wire it into HAL with `mb2hal`
+`0220H` gives real output frequency, so `spindle.0.at-speed` becomes genuine feedback rather than
+a timer. RPM ⇄ register: `0201H = RPM / 6`, and `RPM = 0220H * 6` (400.0 Hz = 24000 RPM).
