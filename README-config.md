@@ -704,3 +704,23 @@ homed.**
    own ceiling and was the one that stalled.
 2. **`remora.joint.N.deadband` set to 1.5 steps**, stopping the stepgen hunting that had all
    three motors dithering ±1 step at standstill.
+
+## ⚠️ CORRECTION — the unhomed hazard is narrower than stated above (2026-09-06)
+
+Earlier passages in this file say an unhomed machine has "no travel protection at all". **That
+overstates it**, and the overstatement is mine. `NO_FORCE_HOMING` is deliberately **not** set, so
+LinuxCNC refuses MDI and AUTO until every joint is homed — discovered when `M3 S6000` was rejected
+until homing was done.
+
+So the accurate picture:
+
+| Unhomed | |
+|---|---|
+| **Jogging** | ⚠️ **no protection** — endstops are `home-sw-in` only, never limit pins, so they do not stop a jog; soft limits need a homed machine |
+| **MDI / AUTO** | ✅ **blocked entirely by LinuxCNC** — a program cannot be run, so it cannot be driven into a hard stop |
+
+⇒ **The real exposure is manual jogging on a freshly powered machine, and nothing else.**
+
+🚨 **Do NOT set `NO_FORCE_HOMING = 1`.** It would remove the one interlock that makes the above
+true, in exchange for convenience that is worth nothing here. Leaving it unset is what confines
+the hazard to jogging.
