@@ -88,6 +88,29 @@ net y-enable   joint.1.amp-enable-out => remora.joint.1.enable
 # ---- Joint 2 : Z ----
 setp remora.joint.2.scale     [JOINT_2]SCALE
 setp remora.joint.2.maxaccel  [JOINT_2]STEPGEN_MAXACCEL
+
+##############################################################################
+# STEPGEN DEADBAND — stops the stepgen hunting at standstill
+#
+# remora.joint.N.deadband defaults to 0.0, which makes the stepgen chase
+# position errors far smaller than one step — errors it physically cannot
+# correct. The result is a continuous ±1 step dither: freq-cmd alternating
+# instead of settling, and the motor audibly buzzing while stationary.
+#
+# Measured 2026-09-06 with deadband=0: X freq-cmd alternated -1.07 / +1.93 and
+# pos-fb dithered by exactly 0.005 mm = one step at 200 steps/mm. Y did the
+# same (-1 / +2); it simply was not audible. Setting the deadband stopped both
+# — Y went to 2.8e-09, X to a steady value with ZERO drift measured over 40 s.
+#
+# Set to 1.5 steps. This costs nothing in achievable accuracy, because the
+# stepgen cannot resolve finer than one step in the first place:
+#     X/Y  1 step = 1/200 = 0.005 mm   -> 0.0075
+#     Z    1 step = 1/400 = 0.0025 mm  -> 0.00375
+# The deadband is in MACHINE UNITS (mm), applied to command-minus-feedback.
+##############################################################################
+setp remora.joint.0.deadband  0.0075
+setp remora.joint.1.deadband  0.0075
+setp remora.joint.2.deadband  0.00375
 net z-pos-cmd  joint.2.motor-pos-cmd  => remora.joint.2.pos-cmd
 net z-pos-fb   remora.joint.2.pos-fb  => joint.2.motor-pos-fb
 net z-enable   joint.2.amp-enable-out => remora.joint.2.enable
