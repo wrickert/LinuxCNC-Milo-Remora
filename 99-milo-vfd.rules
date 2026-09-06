@@ -1,0 +1,25 @@
+# Stable short device name for the spindle VFD's USB-RS485 adapter.
+# Install to /etc/udev/rules.d/ on the Milo Pi.
+#
+# WHY THIS EXISTS:
+#
+# mb2hal cannot open /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0. That
+# path is 49 characters and mb2hal uses fixed-size buffers, so it fails at
+# startup with:
+#     mb2hal get_tx_connection ERR: ... cannot connect to link, ret[-1] fd[-1]
+# mbpoll opens the identical path without complaint, which is what isolated
+# the fault to mb2hal rather than to permissions, the adapter or the port.
+#
+# /dev/ttyUSB0 is not safe to hardcode instead: the number depends on what
+# else is plugged in and in what order, and a USB SD-card reader has already
+# been on this Pi during this build. A config pinned to ttyUSB0 works until
+# the day it silently addresses something else.
+#
+# So: a short, stable symlink. QinHeng CH340 (1a86:7523).
+#
+# WARNING: this adapter reports NO serial number, so the rule can only match
+# on vendor:product. A SECOND CH340 adapter on this Pi would be ambiguous and
+# the symlink could attach to the wrong one. If that ever happens, pin it to a
+# physical USB port by adding KERNELS=="1-1.2" (or whichever) to the rule.
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="milo-vfd", GROUP="dialout", MODE="0660"

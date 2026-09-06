@@ -24,6 +24,8 @@ say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 FILES=(
   "milo.ini:milo.ini"
   "milo.hal:milo.hal"
+  "spindle.hal:spindle.hal"
+  "spindle-mb2hal.ini:spindle-mb2hal.ini"
   "octopus/config.txt:octopus-config.txt"
 )
 

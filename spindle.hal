@@ -1,0 +1,59 @@
+##############################################################################
+# SPINDLE — Huanyang H100 VFD over Modbus RTU (mb2hal)
+#
+# Loaded as a second HALFILE from milo.ini. Kept separate from milo.hal so a
+# spindle comms fault is isolated from the motion config.
+#
+# Verified on the hardware 2026-09-06 — see VFD-H100.md:
+#   400.0 Hz = 24000 RPM  =>  register value = RPM / 6,  RPM = register * 6
+#   Ramp is 3.50 s to 400 Hz (F014/F015 = 350, units 0.01 s — the manual
+#   contradicts itself on this; the machine settled it).
+##############################################################################
+
+loadusr -W mb2hal config=spindle-mb2hal.ini
+
+# scale.0 : RPM -> register (divide by 6)
+# scale.1 : register -> RPM (multiply by 6)
+loadrt scale count=2
+addf scale.0 servo-thread
+addf scale.1 servo-thread
+
+# near.0 : is actual speed close enough to commanded? -> at-speed
+loadrt near count=1
+addf near.0 servo-thread
+
+##############################################################################
+# COMMANDED SPEED  ->  VFD
+##############################################################################
+setp scale.0.gain 0.16666667
+net spindle-rpm-cmd  spindle.0.speed-out-abs => scale.0.in
+net spindle-reg-cmd  scale.0.out             => mb2hal.spindle-speed.00.float
+
+##############################################################################
+# RUN / STOP
+#
+# spindle.0.on is true for both M3 and M4. This machine only ever runs the
+# spindle forward — coil 0049H is the Forward coil, and there is no reverse
+# wiring. If reverse is ever wanted it needs coil 004AH and a separate
+# transaction, not a sign change here.
+##############################################################################
+net spindle-run      spindle.0.on            => mb2hal.spindle-run.00.bit
+
+##############################################################################
+# ACTUAL SPEED  ->  at-speed
+#
+# 🚨 spindle.0.at-speed defaults to TRUE when nothing drives it. That is why
+#    this matters: unwired, G-code plunges the instant M3 is issued, before
+#    the spindle has spun up. Driving it from measured output frequency makes
+#    it real feedback.
+#
+# near.0.difference is in RPM. 200 RPM at 24000 max is under 1%, and the drive
+# reaches speed in about a second, so this is not a meaningful delay.
+##############################################################################
+setp scale.1.gain 6.0
+net spindle-reg-fb   mb2hal.spindle-fb.00.float => scale.1.in
+net spindle-rpm-fb   scale.1.out                => near.0.in2
+
+net spindle-rpm-cmd  => near.0.in1
+setp near.0.difference 200.0
+net spindle-at-speed near.0.out => spindle.0.at-speed
