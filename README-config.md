@@ -537,7 +537,7 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 | 8 | Spindle at-speed | ✅ **Solved by the Modbus decision** — read actual output frequency from `0220H` and compare against commanded. Real feedback rather than a relay to trust. See [VFD-H100.md](VFD-H100.md). |
 | 9 | VFD make/model | ✅ **IDENTIFIED 2026-09-05: Huanyang H100-1.5C2-1B**, 1.5 kW, 1PH 110 V in, 3PH 0-110 V 0-1000 Hz out. Has `485+`/`485-` ⇒ **Modbus RTU via `mb2hal`** (ships with LinuxCNC, no new deps). Full parameter and register map in **[VFD-H100.md](VFD-H100.md)**. 🚨 Not `hy_vfd` — that is the HY series. 🚨 `F165=3` is **8N1**, not the 8E1 the forums claim. 🚨 Never poll-write `F` parameters: EEPROM wear. ⚠️ Confirm the spindle is 110 V — this drive does not voltage-double. |
 | 10 | Probe / toolsetter | ✅ **Toolsetter WIRED AND VERIFIED 2026-09-06** on `STOP3`/`PG_11` → `remora.input.03`: FALSE at rest, TRUE on contact, no invert. `net probe-in` now live in `milo.hal`. ⚠️ A touch probe added later must **share** `motion.probe-input` — OR'd in HAL or physically switched. |
-| 11 | RT flavour | 🚨 See above. Blocked on the loaded latency test. |
+| 11 | RT flavour | ✅ **CLOSED 2026-09-06 by measurement.** `cyclictest` 60 s, RT prio 80, all 4 cores: **max 11 µs**, avg 2 µs. Servo period is 1 ms and `BASE_PERIOD = 0`, so the margin is **~90×**. The "Using POSIX non-realtime" message is a *detection* artefact, not a performance problem. |
 
 ## 💾 Storage: SD → NVMe, and keeping the card as a live fallback
 
@@ -760,3 +760,40 @@ trail.
 ⚠️ Also noticed: a **web browser was running on the controller** (`x-www-browser` plus an isolated
 content process). That is the largest avoidable background load on a machine that should be doing
 one job — and the same failure class as the Chromium leak that wedged the dashboard panel.
+
+## ✅ RT LATENCY — measured, and the question is closed (2026-09-06)
+
+`cyclictest -m -S -p 80 -i 1000 -D 60` on the RT kernel, fan fitted, after a reboot:
+
+| Core | Min | Avg | **Max** |
+|---|---|---|---|
+| 0 | 1 µs | 2 µs | **11 µs** |
+| 1 | 1 µs | 2 µs | 10 µs |
+| 2 | 1 µs | 2 µs | 8 µs |
+| 3 | 1 µs | 2 µs | 10 µs |
+
+**Conditions were verified either side and did not move** — `throttled` identical before and
+after, temp steady at 40 °C, rail 5.14 V. That check is not optional: under-voltage and thermal
+throttling both work by varying the CPU clock, which is exactly what this test measures. A run
+where the flags change measures the power supply or the cooling, not the kernel.
+
+### Why 11 µs is comfortable here
+
+`SERVO_PERIOD = 1000000` (1 ms), and **`BASE_PERIOD = 0`** — Remora generates steps on the STM32,
+so **the Pi has no base thread at all**. Worst-case latency is therefore **1.1 % of the only
+realtime period this machine has. Margin ≈ 90×.**
+
+📌 **That margin is architectural, not luck.** A conventional LinuxCNC PC runs a base thread at
+25–50 kHz — a 20–40 µs period, where 11 µs of jitter would be marginal to bad. Offloading stepgen
+to Remora removes that thread entirely, which is what makes a Pi viable as a controller.
+
+🚨 **So "Using POSIX non-realtime" can be ignored.** It is the `/sys/kernel/realtime` detection gap
+described above — the kernel *is* PREEMPT_RT and performs like it. Do not go patching or
+rebuilding kernels over that message.
+
+⚠️ **Caveat: this run was unloaded** — no cutting, no heavy GUI. Worth re-running during real
+machining. Given ~90× margin, even an order-of-magnitude degradation stays comfortable, but the
+number to watch is `max`, not `avg`.
+🚨 **`stress-ng` was NOT used** and remains prohibited on this Pi — an earlier session crashed the
+machine with it (all four cores loaded, dropped off the network). That was during the brownout era
+and cooling is now fixed, but retesting it should be a deliberate decision, not a side effect.
