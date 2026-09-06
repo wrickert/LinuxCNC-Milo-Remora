@@ -536,7 +536,7 @@ under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's
 | 7 | Spindle PWM + enable | ⚠️ Schema known (`SP` / `PWM Pin` / `PWM Max`). Nothing wired yet. |
 | 8 | Spindle at-speed | ✅ **Solved by the Modbus decision** — read actual output frequency from `0220H` and compare against commanded. Real feedback rather than a relay to trust. See [VFD-H100.md](VFD-H100.md). |
 | 9 | VFD make/model | ✅ **IDENTIFIED 2026-09-05: Huanyang H100-1.5C2-1B**, 1.5 kW, 1PH 110 V in, 3PH 0-110 V 0-1000 Hz out. Has `485+`/`485-` ⇒ **Modbus RTU via `mb2hal`** (ships with LinuxCNC, no new deps). Full parameter and register map in **[VFD-H100.md](VFD-H100.md)**. 🚨 Not `hy_vfd` — that is the HY series. 🚨 `F165=3` is **8N1**, not the 8E1 the forums claim. 🚨 Never poll-write `F` parameters: EEPROM wear. ⚠️ Confirm the spindle is 110 V — this drive does not voltage-double. |
-| 10 | Probe / toolsetter | ⏸ Deliberately last. Both existed under RRF. |
+| 10 | Probe / toolsetter | ✅ **Toolsetter WIRED AND VERIFIED 2026-09-06** on `STOP3`/`PG_11` → `remora.input.03`: FALSE at rest, TRUE on contact, no invert. `net probe-in` now live in `milo.hal`. ⚠️ A touch probe added later must **share** `motion.probe-input` — OR'd in HAL or physically switched. |
 | 11 | RT flavour | 🚨 See above. Blocked on the loaded latency test. |
 
 ## 💾 Storage: SD → NVMe, and keeping the card as a live fallback

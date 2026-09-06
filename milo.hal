@@ -176,7 +176,8 @@ net z-home  remora.input.02 => joint.2.home-sw-in
 #    rather than editing the firmware.
 # ⚠️ LinuxCNC has exactly ONE motion.probe-input. A touch probe added later must
 #    share it — OR'd in HAL, or physically switched. Do not net two sources here.
-# net probe-in  remora.input.03 => motion.probe-input     # TODO(verify polarity)
+# ✅ VERIFIED 2026-09-06: FALSE at rest, TRUE on contact. No invert needed.
+net probe-in  remora.input.03 => motion.probe-input
 
 # --- Tool change (manual) ----------------------------------------------------
 net tool-change     iocontrol.0.tool-change     => iocontrol.0.tool-changed
