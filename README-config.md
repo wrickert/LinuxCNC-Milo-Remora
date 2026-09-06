@@ -677,3 +677,30 @@ Z retracts upward away from the table before X and Y move.
 🚨 **Until homing succeeds there is still no travel protection**: endstops are netted to
 `joint.N.home-sw-in` only, not to limit pins, so they do **not** stop a jog; and soft limits do
 not apply to an unhomed machine.
+
+## ✅ HOMING WORKS — soft limits now active (2026-09-06)
+
+All three axes home smoothly after the search-speed reduction.
+
+| Joint | Landed at | `HOME` | Drift over 30 s |
+|---|---|---|---|
+| X | −0.01 | 0.0 | **0.000000 mm** |
+| Y | 208.01 | 208.0 | **0.000000 mm** |
+| Z | −0.01 | 0.0 | **0.000000 mm** |
+
+The 0.01 mm is latch residual — two steps at 200 steps/mm, i.e. inside the machine's resolution.
+Zero drift includes **Z under gravity**, which was the one worth checking: a vertical axis that
+sags at standstill would show up here and does not.
+
+🎉 **Soft limits are live from this point.** Until homing succeeded there was *no* travel
+protection at all — endstops are netted to `joint.N.home-sw-in` only, not limit pins, so they
+never stopped a jog, and `[AXIS_*]` limits do not apply to an unhomed machine. That caveat is now
+retired for normal operation, but **it returns every time the machine is powered on and not yet
+homed.**
+
+### What made homing work
+1. **Search speeds cut to ~30% of each joint's `MAX_VELOCITY`** (was 30.0 across the board, an
+   RRF `F1800` figure measured on the CDYv3 at 32 microsteps). Z was the worst case at 90% of its
+   own ceiling and was the one that stalled.
+2. **`remora.joint.N.deadband` set to 1.5 steps**, stopping the stepgen hunting that had all
+   three motors dithering ±1 step at standstill.
