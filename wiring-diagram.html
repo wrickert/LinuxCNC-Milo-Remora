@@ -125,7 +125,7 @@
     font-weight:600;font-size:15px;margin:6px 0 0;
   }
   p{margin:0;max-width:66ch}
-  ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:66ch}
+  ul,ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:66ch}
   strong{font-weight:600}
   code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9em}
   code{background:var(--surface-2);padding:1px 5px;border-radius:2px}
@@ -243,10 +243,11 @@
   <section>
     <h2>Two power domains, joined only by ground</h2>
     <p>The single decision that shapes everything else: the Pi runs on its own supply, off unswitched mains. The e&#8209;stop drops the machine and leaves the computer alive.</p>
+    <p>The Octopus is the interesting case, because it belongs to <em>both</em> domains. Its logic and endstops sit on the unswitched 24&nbsp;V rail and stay live; only its <span class="mono">VM</span> stepper rail is switched. That is deliberate — see the e&#8209;stop chain section for why dropping the board's logic is the wrong move on this machine.</p>
 
     <figure>
       <div class="figscroll">
-        <svg viewBox="0 0 900 400" role="img" aria-label="Power architecture: mains feeds two independent domains. An unswitched branch powers a 5 volt 5 amp USB-C PD supply and the Raspberry Pi 5, which stays powered. A switched branch runs through the e-stop contactor to a 24 volt PSU feeding the BTT Octopus, and to the VFD feeding the spindle; that whole domain drops on e-stop. The Pi and Octopus are joined only by SPI and ground, with no 5 volt link.">
+        <svg viewBox="0 0 900 440" role="img" aria-label="Power architecture: mains feeds an unswitched branch and a switched branch. Unswitched powers a 5 volt USB-C PD supply feeding the Raspberry Pi 5, and a 24 volt PSU that feeds the Octopus logic and endstops. The switched branch runs through a 24 volt coil contactor, which supplies the VFD and spindle with mains and the Octopus stepper VM rail with 24 volts. The Octopus straddles both domains: its logic stays live on e-stop while its motor rail drops. The Pi and Octopus are joined only by SPI and ground, with no 5 volt link.">
           <defs>
             <marker id="a-mains" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-mains" d="M0,0 L10,5 L0,10 z"/></marker>
             <marker id="a-24" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-24" d="M0,0 L10,5 L0,10 z"/></marker>
@@ -254,67 +255,76 @@
             <marker id="a-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-sig" d="M0,0 L10,5 L0,10 z"/></marker>
           </defs>
 
-          <rect class="zone" x="200" y="8" width="680" height="112" rx="4"/>
+          <rect class="zone" x="200" y="8" width="680" height="232" rx="4"/>
           <text class="tz" x="208" y="26">STAYS POWERED</text>
-          <rect class="zone" x="200" y="136" width="680" height="246" rx="4"/>
-          <text class="tz" x="208" y="154">DROPS ON E-STOP</text>
+          <rect class="zone" x="200" y="256" width="680" height="176" rx="4"/>
+          <text class="tz" x="208" y="274">DROPS ON E-STOP</text>
 
-          <rect class="bx" x="24" y="204" width="130" height="68" rx="3"/>
-          <text class="t" x="89" y="234" text-anchor="middle">Mains AC</text>
-          <text class="ts" x="89" y="252" text-anchor="middle">house circuit</text>
+          <rect class="bx" x="24" y="180" width="130" height="68" rx="3"/>
+          <text class="t" x="89" y="210" text-anchor="middle">Mains AC</text>
+          <text class="ts" x="89" y="228" text-anchor="middle">house circuit</text>
 
-          <rect class="bx" x="230" y="44" width="170" height="64" rx="3"/>
-          <text class="t" x="315" y="72" text-anchor="middle">USB-C PD supply</text>
-          <text class="ts" x="315" y="90" text-anchor="middle">5 V · 5 A</text>
+          <rect class="bx" x="230" y="40" width="170" height="60" rx="3"/>
+          <text class="t" x="315" y="66" text-anchor="middle">USB-C PD supply</text>
+          <text class="ts" x="315" y="84" text-anchor="middle">5 V · 5 A</text>
 
-          <rect class="bx" x="660" y="44" width="200" height="64" rx="3"/>
-          <text class="t" x="760" y="72" text-anchor="middle">Raspberry Pi 5</text>
-          <text class="ts" x="760" y="90" text-anchor="middle">+ NVMe HAT · LinuxCNC</text>
+          <rect class="bx" x="660" y="40" width="200" height="60" rx="3"/>
+          <text class="t" x="760" y="66" text-anchor="middle">Raspberry Pi 5</text>
+          <text class="ts" x="760" y="84" text-anchor="middle">+ NVMe HAT · LinuxCNC</text>
 
-          <rect class="bx" x="230" y="200" width="170" height="76" rx="3"/>
-          <text class="t" x="315" y="230" text-anchor="middle">E-stop contactor</text>
-          <text class="ts" x="315" y="248" text-anchor="middle">latching mushroom</text>
-          <text class="ts" x="315" y="264" text-anchor="middle">+ start / reset</text>
+          <rect class="bx" x="230" y="132" width="170" height="60" rx="3"/>
+          <text class="t" x="315" y="158" text-anchor="middle">24 V PSU</text>
+          <text class="ts" x="315" y="176" text-anchor="middle">moves upstream</text>
 
-          <rect class="bx" x="460" y="170" width="150" height="64" rx="3"/>
-          <text class="t" x="535" y="198" text-anchor="middle">24 V PSU</text>
-          <text class="ts" x="535" y="216" text-anchor="middle">motors + logic</text>
+          <rect class="bx" x="230" y="290" width="170" height="76" rx="3"/>
+          <text class="t" x="315" y="318" text-anchor="middle">Contactor</text>
+          <text class="ts" x="315" y="336" text-anchor="middle">24 V coil · 3-pole</text>
+          <text class="ts" x="315" y="353" text-anchor="middle">NOT YET FITTED</text>
 
-          <rect class="bx" x="660" y="170" width="200" height="64" rx="3"/>
-          <text class="t" x="760" y="198" text-anchor="middle">BTT Octopus v1.1</text>
-          <text class="ts" x="760" y="216" text-anchor="middle">Remora firmware</text>
+          <rect class="bx" x="660" y="200" width="200" height="112" rx="3"/>
+          <text class="t" x="760" y="228" text-anchor="middle">BTT Octopus v1.1</text>
+          <text class="ts" x="760" y="249" text-anchor="middle">logic · endstops — live</text>
+          <text class="ts" x="760" y="294" text-anchor="middle">VM steppers — switched</text>
+          <path class="zone" d="M656,240 L864,240"/>
+          <path class="zone" d="M656,256 L864,256"/>
 
-          <rect class="bx" x="460" y="300" width="150" height="64" rx="3"/>
-          <text class="t" x="535" y="328" text-anchor="middle">VFD</text>
-          <text class="ts" x="535" y="346" text-anchor="middle">110 V in</text>
+          <rect class="bx" x="460" y="350" width="150" height="60" rx="3"/>
+          <text class="t" x="535" y="376" text-anchor="middle">VFD</text>
+          <text class="ts" x="535" y="394" text-anchor="middle">110 V in</text>
 
-          <rect class="bx" x="660" y="300" width="200" height="64" rx="3"/>
-          <text class="t" x="760" y="328" text-anchor="middle">Spindle</text>
-          <text class="ts" x="760" y="346" text-anchor="middle">24 000 rpm max</text>
+          <rect class="bx" x="660" y="350" width="200" height="60" rx="3"/>
+          <text class="t" x="760" y="376" text-anchor="middle">Spindle</text>
+          <text class="ts" x="760" y="394" text-anchor="middle">24 000 rpm max</text>
 
-          <path class="wire w-mains" d="M89,204 L89,76 L222,76" marker-end="url(#a-mains)"/>
-          <text class="tw tw-mains" x="97" y="150">unswitched</text>
-          <path class="wire w-mains" d="M154,238 L222,238" marker-end="url(#a-mains)"/>
-          <text class="tw tw-mains" x="188" y="230" text-anchor="middle">switched</text>
+          <path class="wire w-mains" d="M89,180 L89,70 L222,70" marker-end="url(#a-mains)"/>
+          <text class="tw tw-mains" x="97" y="128">unswitched</text>
+          <path class="wire w-mains" d="M154,200 L188,200 L188,162 L222,162" marker-end="url(#a-mains)"/>
+          <path class="wire w-mains" d="M154,228 L188,228 L188,306 L222,306" marker-end="url(#a-mains)"/>
+          <text class="tw tw-mains" x="182" y="268" text-anchor="end">switched</text>
 
-          <path class="wire w-mains" d="M400,222 L430,222 L430,202 L452,202" marker-end="url(#a-mains)"/>
-          <path class="wire w-mains" d="M400,254 L430,254 L430,332 L452,332" marker-end="url(#a-mains)"/>
+          <path class="wire w-24" d="M400,152 L620,152 L620,220 L652,220" marker-end="url(#a-24)"/>
+          <text class="tw tw-24" x="470" y="144" text-anchor="middle">24 V logic — always on</text>
 
-          <path class="wire w-24" d="M610,202 L652,202" marker-end="url(#a-24)"/>
-          <text class="tw tw-24" x="631" y="194" text-anchor="middle">24 V</text>
+          <path class="wire w-24" d="M315,192 L315,290" marker-end="url(#a-24)"/>
+          <text class="tw tw-24" x="325" y="224">24 V</text>
 
-          <path class="wire w-mains" d="M610,332 L652,332" marker-end="url(#a-mains)"/>
-          <text class="tw tw-mains" x="631" y="324" text-anchor="middle">3-phase</text>
+          <path class="wire w-24" d="M400,306 L652,306" marker-end="url(#a-24)"/>
+          <text class="tw tw-24" x="526" y="298" text-anchor="middle">24 V VM — switched</text>
 
-          <path class="wire w-5" d="M400,76 L652,76" marker-end="url(#a-5)"/>
-          <text class="tw tw-5" x="526" y="68" text-anchor="middle">5 V · 5 A</text>
+          <path class="wire w-mains" d="M400,350 L430,350 L430,380 L452,380" marker-end="url(#a-mains)"/>
 
-          <path class="wire w-sig" d="M690,108 L690,162" marker-end="url(#a-sig)" stroke-dasharray="6 4"/>
-          <text class="tw tw-sig" x="678" y="130" text-anchor="end">SPI + GND only</text>
-          <text class="tw tw-sig" x="678" y="148" text-anchor="end">no 5 V between them</text>
+          <path class="wire w-mains" d="M610,380 L652,380" marker-end="url(#a-mains)"/>
+          <text class="tw tw-mains" x="631" y="370" text-anchor="middle">3-phase</text>
+
+          <path class="wire w-5" d="M400,70 L652,70" marker-end="url(#a-5)"/>
+          <text class="tw tw-5" x="526" y="62" text-anchor="middle">5 V · 5 A</text>
+
+          <path class="wire w-sig" d="M690,100 L690,196" marker-end="url(#a-sig)" stroke-dasharray="6 4"/>
+          <text class="tw tw-sig" x="702" y="132">SPI + GND only</text>
+          <text class="tw tw-sig" x="702" y="150">no 5 V between them</text>
         </svg>
       </div>
-      <figcaption>The e&#8209;stop contactor sits in the mains path, so it drops the 24&nbsp;V rail and the VFD together. The Pi's supply is upstream of it and never sees the break — LinuxCNC stays running, keeps its position, and shuts down cleanly on your terms.</figcaption>
+      <figcaption>The contactor is the only thing that switches power; every e&#8209;stop button merely opens its 24&nbsp;V coil circuit. That is what lets a second station — a pendant — exist at all, because the button no longer has to break mains itself. The Pi and the Octopus's logic are upstream of the break, so LinuxCNC stays running, keeps its position, and can report <em>why</em> it stopped.</figcaption>
     </figure>
 
     <p>The Octopus <em>can</em> power a Pi — it has a dedicated header (J26) and an 8&nbsp;A 5&nbsp;V buck, so this isn't a capacity problem. It's a behaviour problem. Hang the Pi off that rail and every e&#8209;stop, every power-down and every fault kills the computer mid-cut: lost machine position, no controlled recovery, and an unclean NVMe shutdown every single time.</p>
@@ -493,15 +503,40 @@
   <section>
     <h2>E-stop chain</h2>
     <p>The e&#8209;stop breaks the contactor coil circuit directly, in copper. LinuxCNC finding out about it is <em>awareness</em>, not the safety function — never make software the thing that stops the machine.</p>
-    <ul>
-      <li><strong>Hardware path:</strong> latching mushroom button, normally-closed, in series with the contactor coil. Press it and the coil drops out, taking the 24&nbsp;V PSU and the VFD's mains with it. Release-and-press-start to restore, so power never comes back on its own.</li>
-      <li><strong>Software path:</strong> an auxiliary NC contact on the contactor into an Octopus input, so LinuxCNC knows the machine is dead and refuses to run. This is for state, not for stopping.</li>
-      <li><strong>Free watchdog:</strong> Remora's <code>SPI-status</code> pin already drops LinuxCNC's enable if the link to the Octopus fails. It's wired in <code>milo.hal</code> — keep it.</li>
-    </ul>
 
     <div class="callout">
-      <span class="ch">Worth designing for now</span>
-      <p>Killing mains to a VFD while the spindle is turning is hard on the drive, and the spindle then coasts for a long time with a tool in the work. The better arrangement uses the VFD's own safe-stop or external-fault input to brake the spindle, with the contactor as the backstop behind it. Decide this before you build the panel — it's a wiring change, not a settings change.</p>
+      <span class="ch">As built today — 2026-09-06</span>
+      <p>There is <strong>no contactor in the machine.</strong> The wiring is <span class="mono">mains AC &rarr; e-stop switch &rarr; 24&nbsp;V PSU</span>, with the VFD on the same switched side. The mushroom's own contacts break mains directly.</p>
+      <p><strong>That is a valid category-0 stop and nothing about it is unsafe.</strong> Press it and the spindle and the steppers both lose power. Everything below is about what it <em>can't</em> do, not about a hazard.</p>
+    </div>
+
+    <p>It has three limits, and the first is the one that matters:</p>
+    <ul>
+      <li><strong>It cannot grow a second station.</strong> With the mushroom breaking mains, any additional e&#8209;stop — a pendant, a second panel button — would have to break mains too. Running mains down a pendant tether is a non-starter, so the current topology structurally forbids a pendant e&#8209;stop.</li>
+      <li><strong>It kills the Octopus.</strong> Dropping the 24&nbsp;V PSU takes the board's logic with it, and an abnormal power loss is exactly what leaves the Octopus wedged in <span class="mono">WDRESET</span> needing <code>octopus-reset.sh</code>. Every press is a chance to wedge the board — see the WDRESET section in <span class="mono">README-config.md</span>.</li>
+      <li><strong>It wears the contacts.</strong> A 22&nbsp;mm mushroom contact block is rated for control circuits. It is currently breaking a 1.5&nbsp;kW VFD's mains, inrush included, every time.</li>
+    </ul>
+
+    <h3>The rewire — three moves</h3>
+    <ol>
+      <li><strong>24&nbsp;V PSU moves upstream</strong> of the contactor, permanently powered. It now supplies the coil circuit itself, so the e&#8209;stop cannot kill the supply that has to re-energise it.</li>
+      <li><strong>A 24&nbsp;VDC-coil contactor</strong> switches the VFD's mains and the Octopus's <span class="mono">VM</span> stepper rail. Spindle and motors dead on press — the actual safety requirement.</li>
+      <li><strong>Octopus logic and endstops stay live.</strong> No WDRESET wedge, and LinuxCNC stays coherent enough to say <em>why</em> it stopped instead of dumping you into a link-down diagnosis.</li>
+    </ol>
+    <p>Every e&#8209;stop button then sits in series in the 24&nbsp;V coil loop, carrying tens of milliamps. Adding the pendant becomes two more NC contacts in that loop — <strong>the tether never carries mains.</strong> A momentary START in parallel with the contactor's NO auxiliary gives the seal-in latch, so power never returns on its own.</p>
+
+    <div class="callout note">
+      <span class="ch">Stage 2, drop-in later</span>
+      <p>A <strong>safety relay</strong> between the button chain and the coil buys dual-channel monitoring, cross-fault detection, force-guided contacts and EDM (the contactor's NC auxiliary loops back, so a welded contactor blocks the reset). That is the piece that makes a <em>detachable</em> e&#8209;stop trustworthy, because the failure you actually care about in a pendant is a chafed conductor in a cable that gets flexed daily — and dual-channel is what detects it. Note it <em>replaces</em> the seal-in latch; its monitored reset does that job. Pull four e&#8209;stop conductors in the tether from day one even if stage 1 only uses two.</p>
+    </div>
+
+    <p><strong>Software path:</strong> an auxiliary NC contact on the contactor into a spare Octopus input, so LinuxCNC knows the machine is dead and refuses to run. <span class="mono">octopus/config.txt</span> currently defines only four digital inputs (three endstops plus the toolsetter), so there is room. This is for state, not for stopping.</p>
+    <p><strong>Free watchdog:</strong> Remora's <code>SPI-status</code> pin already drops LinuxCNC's enable if the link to the Octopus fails. It's wired in <code>milo.hal</code> — keep it.</p>
+
+    <div class="callout">
+      <span class="ch">Still open — spindle braking</span>
+      <p>Killing mains to a VFD while the spindle is turning is hard on the drive, and the spindle then coasts for a long time with a tool in the work. The H100 has <span class="mono">X1</span>&ndash;<span class="mono">X6</span> digital inputs with a <span class="mono">P12</span> source, so one can be assigned to external-fault or free-stop and driven from the safety relay's instantaneous output, with the contactor dropping on a delayed output behind it.</p>
+      <p>🚨 <strong>The H100 has no STO.</strong> <span class="mono">X1</span>&ndash;<span class="mono">X6</span> are functional inputs, not safety-rated ones. Anything done through them is a courtesy to the drive, never the safety function — the contactor stays the stop. Whether you want coast (category&nbsp;0) or a commanded decel then power-off (category&nbsp;1) is still undecided.</p>
     </div>
   </section>
 
