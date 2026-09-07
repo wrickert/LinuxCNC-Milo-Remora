@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Reset Octopus
+GenericName=Hardware-reset the Remora board
+Comment=Use when LinuxCNC will not come out of E-stop. Close LinuxCNC first.
+Exec=bash -c "$HOME/octopus-reset.sh; echo; read -n1 -r -p 'Press any key to close...'"
+Icon=view-refresh
+Terminal=true
+StartupNotify=true
+Categories=X-CNC;Utility;
+Keywords=remora;octopus;spi;estop;reset;

@@ -797,3 +797,101 @@ number to watch is `max`, not `avg`.
 🚨 **`stress-ng` was NOT used** and remains prohibited on this Pi — an earlier session crashed the
 machine with it (all four cores loaded, dropped off the network). That was during the brownout era
 and cooling is now fixed, but retesting it should be a deliberate decision, not a side effect.
+
+## 🚨 E-stop won't clear = the Octopus is wedged in WDRESET (2026-09-06)
+
+**Symptom.** LinuxCNC refuses to come out of E-stop. Pressing F1 or clicking the button does
+nothing — it flips and immediately flips back.
+
+**That is correct behaviour, not a bug.** `milo.hal:59` wires
+
+```
+net remora-status  remora.SPI-status => iocontrol.0.emc-enable-in
+```
+
+so if Remora cannot talk to the Octopus, LinuxCNC re-asserts E-stop the instant you clear it.
+It will not enable a machine it has no control over. Treat "E-stop won't clear" as
+**"the SPI link is down"** and go diagnose the link, not the GUI.
+
+### Diagnosing it
+
+The single most useful check costs nothing:
+
+```
+halcmd show pin remora | grep SPI-
+```
+
+`SPI-enable TRUE`, `SPI-reset FALSE`, `SPI-status FALSE` is the signature.
+
+Then, with LinuxCNC **stopped**, look at whether anything holds the SPI device:
+
+```
+sudo ls -l /proc/*/fd 2>/dev/null | grep spidev
+```
+
+⚠️ **Nothing holding `/dev/spidev0.0` is NOT proof of a fault.** `remora-spi` does not open the
+device until it sees a **rising edge on `remora.SPI-reset`**, which only arrives when you clear
+E-stop. Before that first pulse the fd legitimately does not exist. This is the same trap that
+made the original "link is down" test wrong (see the 2026-09-05 section above).
+
+### Telling a wedged board apart from a loose wire
+
+Watch the Octopus's own serial console on `/dev/ttyAMA0` while running `spi-link-test.sh`. A
+board in WDRESET says:
+
+```
+Reset SPI now
+Communication data error
+```
+
+That is the board **acknowledging the reset command but rejecting the data packet after it** —
+so the link is half-alive, which looks alarmingly like a marginal wire. It is not.
+
+**The discriminator is a clock sweep.** Run `spi-freq-sweep.sh`:
+
+| Result | Meaning |
+|---|---|
+| Fails identically at 500 kHz **and** 4 MHz | Protocol/state problem — the board is wedged |
+| Works at 500 kHz, fails at 2–4 MHz | Signal integrity — loose wire, poor ground, long runs |
+
+On 2026-09-06 it failed identically across the whole sweep, which ruled out the wiring
+immediately — worth having, given three physical wire faults in the preceding two days.
+
+### The fix
+
+Hardware-reset the board (**Pi GPIO25 → Octopus PC_15**, active low) with `octopus-reset.sh`,
+which pulses the line and then prints and grades the boot banner. A healthy board reports:
+
+```
+Json config file lenght = 2264
+Config deserialisation - Deserialization succeeded
+Testing connection to TMC driver...OK     (×3)
+## Entering START state
+```
+
+Then restart LinuxCNC and clear E-stop normally.
+
+### This is not a recurring tax
+
+Verified the same day: after a **clean** LinuxCNC exit the board sits in `IDLE`, and the next
+SPI reset pulse walks it `IDLE → RESET → RUNNING` with no hardware reset needed. Two
+consecutive link tests passed back-to-back. Only an **abnormal** stop — LinuxCNC killed, a
+crash, control-box power pulled — leaves it in WDRESET. The 2026-09-06 wedge followed an
+earlier power interruption.
+
+**So if you find yourself running `octopus-reset.sh` regularly, do not treat it as routine —
+suspect power.**
+
+### 🚫 Do not "fix" this by netting PRU-reset to the E-stop chain
+
+`remora.PRU-reset` is an **IN** pin on the component and `milo.hal` deliberately leaves it
+unnetted, which is why LinuxCNC has no software path to reset the board. The obvious repair —
+
+```
+net pru-reset iocontrol.0.user-request-enable => remora.PRU-reset   # DON'T
+```
+
+— makes things worse. The board takes **~3 seconds** to boot and re-initialise the three
+TMC2209 drivers (the boot banner shows each one being probed), which is far longer than
+LinuxCNC waits for `emc-enable-in` after clearing E-stop. Every single E-stop clear would then
+fail once and need a second press. Keep the reset manual and out of the safety chain.
