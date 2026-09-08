@@ -584,10 +584,13 @@ more given the machine is indoors with no garage.
 | Output | fairly large droplets deposited **on the work** | finely atomized coolant **into the air** |
 | Surroundings | "no film on anything surrounding" | film on everything |
 | Breathing it | essentially none airborne | airborne aerosol you are standing in |
-| Air | **5–10 psi**, some up to 20 | much higher |
+| Air | **10–20 psi** (Fog Buster) / **20–120 psi, 0.7–2.0 CFM** (LUBE CUBE) | much higher |
 
-The cheap kits are the ones that put coolant fog in the room. Don't. ✅ Side benefit of the
-5–10 psi figure: air consumption is tiny, which is what makes the CAT 8010 comfortable here.
+The cheap kits are the ones that put coolant fog in the room. Don't. ✅ Air consumption is still
+tiny — the LUBE CUBE's stated **0.7–2.0 CFM** sits comfortably inside the CAT 8010's 3.10 CFM
+@ 40 psi, so the compressor conclusion holds.
+⚠️ **Correction:** an earlier version of this section said 5–10 psi. Fog Buster's own copy says
+**10–20 psi**; the LUBE CUBE wants **20–120 psi**. Still low, but not as low as stated.
 Coolant consumption is also negligible — an 8 oz reservoir is reported to need refilling about
 once a year.
 
@@ -621,6 +624,48 @@ and coolant plus a live 24 V board is a bad afternoon.
 
 ⚠️ Prices not quoted here on purpose — check live listings rather than trusting a remembered
 figure (see [[verify-prices-in-chrome]]).
+
+
+### 🚨 Priced 2026-09-08 — and Fog Buster looks discontinued
+
+Checked on live listings, not snippets.
+
+| | Price | Availability |
+|---|---|---|
+| **Fog Buster 10100** (½ gal, single sprayer) | **$375.00** | ⚠️ **"Discontinued Item"** |
+| **Tormach LUBE CUBE** (PN 55156) | **$395.00** | Out of stock — backorder |
+
+**The $20 gap is not the story; availability is.** Three independent signals say Fog Buster is
+winding down:
+- `fogbuster.com` is a **parked GoDaddy domain, for sale**
+- the 10100 listing is flagged **Discontinued Item**
+- the dealer's whole Fog Buster category is now **one spare part** — a check valve at $25.71
+
+So in practice this is not a choice between two products. **The LUBE CUBE is the one you can buy**,
+even if it currently ships on backorder.
+
+### What the LUBE CUBE actually includes — this shrinks the parts list
+
+Reservoir · mounting bracket · precision spray nozzle · pneumatic lines · **pressure regulator** ·
+**solenoid valve (pre-assembled)**.
+
+So for the mist leg you do **not** separately need the regulator or the solenoid from the parts
+list above. Those items still apply to the **air blast** leg.
+
+### 🚨 But the included solenoid is 115 Vac — that breaks our wiring plan
+
+That is what "115 Vac" in the product name refers to. It **cannot** be driven from an Octopus FAN
+MOSFET output, which switches 24 V DC low-side. Two ways round it:
+
+1. **Swap the solenoid for a 24 VDC one** — keeps `remora.output.00` driving it directly exactly as
+   `milo.hal` is written, and keeps everything on one low voltage. Preferred.
+2. **Drive the 115 Vac solenoid through an SSR or mains relay** from `remora.output.00`. Works, but
+   puts mains switching in the coolant path for no benefit.
+
+Either way `milo.hal` does not change — only what sits between the output and the valve.
+
+Other requirements: **0.5 gal MQL-safe coolant**, and explicitly **not pure water, alcohols or
+other solvents**.
 
 ## Still open
 
