@@ -573,6 +573,55 @@ quiet compressor inside its rating — see the compressor sizing in [[plasma-tab
 confirm the new modules parsed by reading the boot banner — a mistyped key shows up there and
 nowhere else.
 
+
+### Parts list — mist coolant + air blast
+
+**1. The mist unit — get a non-atomizing one.** This is the decision that matters, and it matters
+more given the machine is indoors with no garage.
+
+| | Non-atomizing (Fog Buster / Tormach LUBE CUBE / HVLP MQL) | Venturi "mist" kits (cheap eBay/Amazon) |
+|---|---|---|
+| Output | fairly large droplets deposited **on the work** | finely atomized coolant **into the air** |
+| Surroundings | "no film on anything surrounding" | film on everything |
+| Breathing it | essentially none airborne | airborne aerosol you are standing in |
+| Air | **5–10 psi**, some up to 20 | much higher |
+
+The cheap kits are the ones that put coolant fog in the room. Don't. ✅ Side benefit of the
+5–10 psi figure: air consumption is tiny, which is what makes the CAT 8010 comfortable here.
+Coolant consumption is also negligible — an 8 oz reservoir is reported to need refilling about
+once a year.
+
+**2. Solenoid valve ×2** — one for mist (M7), one for air blast (M8).
+- 2/2-way, **normally closed**, **24 VDC coil**, 1/4" ports, rated for air, ~5 W.
+- 🔑 **Buy them with a DIN 43650 form B connector that has a built-in LED and flyback diode.**
+  That satisfies the flyback-diode requirement neatly *and* gives you a per-valve indicator — much
+  better than soldering a 1N4007 across each coil yourself.
+- ~0.3 A at 24 V, well inside what the Octopus FAN MOSFET outputs will switch.
+
+**3. Air preparation**
+- Filter / water separator **plus regulator**. Not optional — otherwise you spray water onto the
+  work and into the chips.
+- ⚠️ **Get a low-pressure regulator (0–30 psi) for the mist leg.** A standard 0–125 psi regulator
+  is far too coarse to set 5–10 psi accurately.
+- ⚠️ **Mist and blast want very different pressures** — ~5–10 psi vs ~30–40 psi. Feed them from
+  separate regulators off the same line rather than compromising on one.
+
+**4. Plumbing** — 1/4" or 6 mm push-to-connect fittings, air hose from the compressor, PTFE tape.
+
+**5. Coolant fluid** — water-soluble / semi-synthetic suitable for aluminium. Consumption is so low
+that a small bottle lasts a very long time.
+
+**6. Nozzle + mount** — Loc-Line style flexible hose and a magnetic base. Usually included with the
+unit; a second one is needed for the blast nozzle.
+
+**7. 🚨 The thing nobody budgets for: containment.** The Milo is an **open** machine. Even a
+non-atomizing unit throws droplets and wet chips. You want a splash tray and guards — and
+specifically, **keep it away from the electronics enclosure.** The Octopus and Pi are right there,
+and coolant plus a live 24 V board is a bad afternoon.
+
+⚠️ Prices not quoted here on purpose — check live listings rather than trusting a remembered
+figure (see [[verify-prices-in-chrome]]).
+
 ## Still open
 
 | # | Item | State |
