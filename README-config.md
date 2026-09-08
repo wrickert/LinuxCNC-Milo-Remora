@@ -667,6 +667,55 @@ Either way `milo.hal` does not change — only what sits between the output and 
 Other requirements: **0.5 gal MQL-safe coolant**, and explicitly **not pure water, alcohols or
 other solvents**.
 
+
+### 🔧 DIY option — and what is actually hard about it
+
+**How a Fog Buster works**, which is the whole design brief:
+
+1. The reservoir is **pressurised with air at 10–20 psi**. That pressure — not suction — pushes
+   coolant up the fluid tube.
+2. A **separate, high-volume low-pressure air stream** runs to the nozzle.
+3. They meet **at the nozzle exit**, not inside a venturi. The coolant is *carried* by the air as
+   fairly large droplets rather than atomised into it.
+4. Coolant flow and air flow are adjusted **independently**.
+
+Everything except step 3 is generic plumbing. **The spray head is the hard part** — it is the
+patented geometry, and it is the difference between a fogless sprayer and a fog machine.
+
+#### 🚨 The failure mode to avoid
+**Do not build a venturi / siphon nozzle.** If the air stream draws coolant through a restriction
+— airbrush style — you get atomised fog, which is exactly the thing being avoided, and the reason
+the non-atomising type was chosen in the first place given the machine is indoors.
+
+#### Tier 1 — buy the head, build the rest (recommended)
+CNC Rebuild sell a **"FogBuster DIY Coolant Sprayer Set"**: 1.5 L tank, **original FogBuster spray
+head**, air tube, fluid tube, check valve. You add the regulator, solenoid and mounting.
+⚠️ **No price quoted here — their price field literally renders `awefawfwaf`**, i.e. placeholder
+text. It is also a European shop, so check shipping before assuming it beats $395.
+
+#### Tier 2 — full DIY
+| Part | What to use | Notes |
+|---|---|---|
+| Reservoir | **A garden pressure sprayer** | Already a rated low-pressure vessel with fill cap, pump and usually a relief valve, for very little. 🚨 **Do NOT 3D print a pressure vessel** — FDM layer adhesion, and a bad failure mode. |
+| Regulator | **0–30 psi** | A 0–125 psi regulator cannot set 10–20 psi with any precision. |
+| Coolant flow | small brass **needle valve** on the fluid line | This is the fine-adjustment that matters. |
+| Air flow | needle or ball valve on the air line | Independent adjustment is the entire point. |
+| Check valve | on the fluid line | Stops air backing into the reservoir and coolant into the air line. |
+| Nozzle | **coaxial** — ~1–1.5 mm coolant tube inside/alongside a ~4–6 mm air tube, terminating together | Machine it on the Milo. Coolant must be introduced **at or just past the exit plane**. |
+
+#### 🔑 The valve detail that makes it work with `milo.hal`
+**Use a 3/2 (three-port, two-position) solenoid, not a 2/2.**
+
+A 2/2 merely blocks flow — the reservoir stays pressurised and the nozzle dribbles after M9. A 3/2
+**exhausts the downstream side when de-energised**, so the reservoir vents and flow stops the
+instant the output drops. Same 24 VDC NC coil, same `remora.output.00`, same FAN MOSFET, same
+flyback diode — just the right valve type.
+
+#### What this leverages
+The Milo can machine its own nozzle; the printer can make brackets, the reservoir cradle and a
+Loc-Line mount (but **not** the pressure vessel). The expensive part of the commercial unit is the
+head; almost everything else is a fitting.
+
 ## Still open
 
 | # | Item | State |
