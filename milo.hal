@@ -58,6 +58,41 @@ net user-enable-out     iocontrol.0.user-enable-out     => remora.SPI-enable
 net user-request-enable iocontrol.0.user-request-enable => remora.SPI-reset
 net remora-status       remora.SPI-status               => iocontrol.0.emc-enable-in
 
+##############################################################################
+# 🚨 SAFETY LOOP GAP — LinuxCNC does not currently know the machine is dead
+#
+# Today emc-enable-in is driven by SPI-status ALONE. That covers "the link to
+# the Octopus failed". It does NOT cover the e-stop, and here is why that
+# matters with the contactor topology:
+#
+#   E-stop drops the contactor -> VFD mains and the Octopus VM stepper rail die.
+#   The Octopus LOGIC stays live (deliberately — it keeps endstops and position).
+#   So SPI keeps working, SPI-status stays TRUE, and LinuxCNC happily carries on
+#   executing the program into dead drivers.
+#
+# Result: the tool stops moving but the program does not stop. Commanded
+# position walks away from actual position, and you find out at reset.
+#
+# THE FIX: a normally-open auxiliary contact on the contactor, wired between
+# an Octopus input and GND (dry contact — do NOT put 24 V on a 3.3 V input).
+#   contactor energised -> contact closed -> input pulled LOW -> .not is TRUE
+#   wire breaks         -> input floats HIGH -> .not is FALSE -> e-stop
+# That polarity is deliberate: a broken wire reads as "not safe".
+#
+# ⚠️ LEFT COMMENTED because the contactor is NOT BUILT YET (as of 2026-09-06 the
+#    machine is mains -> e-stop switch -> 24 V PSU, with no contactor at all).
+#    Enabling this against an unwired PG_12 would read "not live" forever and
+#    lock the machine in E-stop. Uncomment only once the aux contact is in.
+##############################################################################
+
+# loadrt and2 count=1
+# addf and2.0 servo-thread
+# net estop-ok      remora.input.04.not => and2.0.in0
+# net remora-status remora.SPI-status   => and2.0.in1
+# net machine-ok    and2.0.out          => iocontrol.0.emc-enable-in
+#   ... and DELETE the direct 'net remora-status ... => iocontrol.0.emc-enable-in'
+#   line above when you do, or HAL will refuse two drivers on one signal.
+
 # remora.PRU-reset drives the hardware reset line (Pi GPIO 25 -> Octopus
 # PC_15). Left unnetted: the component pulses it internally on SPI failure.
 
@@ -182,6 +217,34 @@ net z-home  remora.input.02 => joint.2.home-sw-in
 # signal G-code plunges the moment M3 is issued, before the spindle spools up.
 # See README-config.md — the answer is a VFD "up to frequency" output into a
 # remora input, or Modbus if the drive is a Huanyang.
+
+##############################################################################
+# MIST COOLANT + AIR BLAST
+#
+# LinuxCNC drives these from G-code: M7 = mist on, M8 = flood on, M9 = both off.
+# There is no flood system here, so M8 is repurposed as the air blast — which
+# means you get independent G-code control of coolant and chip clearing.
+#
+# Firmware side (octopus/config.txt), both added 2026-09-08:
+#   PA_8 (FAN0 MOSFET) -> remora.output.00 -> mist solenoid
+#   PE_5 (FAN1 MOSFET) -> remora.output.01 -> air blast solenoid
+#
+# ⚠️ Use the FAN/HEATER MOSFET outputs, not a bare GPIO. Those are low-side
+#    switches with gates pulled down, so they are OFF through boot and reset —
+#    the same reasoning as the spindle enable relay. A bare 3.3 V pin cannot
+#    drive a 24 V solenoid at all.
+# ⚠️ PUT A FLYBACK DIODE ACROSS EACH SOLENOID COIL. An inductive load on a bare
+#    MOSFET kills the FET on the first switch-off.
+# ⚠️ Pin numbers are from the standard Octopus v1.1 pinout — verify against the
+#    silkscreen, and confirm the modules parsed by reading the boot banner.
+#
+# Gating the air matters beyond tidiness: the CAT 8010 is rated 70/30 duty with
+# a 60-minute continuous ceiling, so running blast continuously through a long
+# job exceeds the compressor's own spec. On M8 it only flows during cuts.
+##############################################################################
+
+net coolant-mist  iocontrol.0.coolant-mist  => remora.output.00
+net coolant-flood iocontrol.0.coolant-flood => remora.output.01
 
 ##############################################################################
 # TOOLSETTER / TOUCH PROBE

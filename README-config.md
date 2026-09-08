@@ -514,6 +514,65 @@ loaded comparison first, **after** the power is sorted. Decide on data.
 It browned out and needed a power cycle on 2026-09-04. See the power section above: one
 under-spec PD supply is currently carrying the Pi, its SD card and the Octopus's logic rail.
 
+
+## 🚨 Safety loop: LinuxCNC does not know the machine is dead (open, 2026-09-08)
+
+`emc-enable-in` is driven by **`SPI-status` alone**. That covers "the link to the Octopus failed".
+It does **not** cover the e-stop — and with the contactor topology that is a real behavioural gap,
+not a theoretical one:
+
+> E-stop drops the contactor → VFD mains and the Octopus **VM stepper rail** die. The Octopus
+> **logic stays live** (deliberately — that is what preserves endstops and position). So SPI keeps
+> working, `SPI-status` stays TRUE, and **LinuxCNC carries on executing the program into dead
+> drivers.** The tool stops moving; the program does not stop. Commanded position walks away from
+> actual position and you discover it at reset.
+
+**The fix:** a **normally-open auxiliary contact** on the contactor, wired between an Octopus input
+and **GND** — a dry contact. Do not put 24 V on a 3.3 V input.
+
+| State | Contact | Input | `.not` | Meaning |
+|---|---|---|---|---|
+| Contactor energised | closed | LOW | TRUE | machine live |
+| E-stop pressed | open | HIGH | FALSE | e-stopped |
+| **Wire breaks** | open | HIGH | FALSE | **e-stopped — fail-safe** |
+
+That polarity is chosen so a broken wire reads as *not safe*.
+
+Wired in `octopus/config.txt` as `PG_12` → `remora.input.04`. The HAL side is written but
+**deliberately left commented out**, because the contactor is not built yet — as of 2026-09-06 the
+machine is still mains → e-stop switch → 24 V PSU with no contactor. Enabling it against an
+unwired input would read "not live" forever and lock the machine in E-stop.
+
+⚠️ When uncommenting, **delete the direct `net remora-status … => iocontrol.0.emc-enable-in`
+line** — HAL will refuse two drivers on one signal.
+
+## 💧 Mist coolant + air blast (config written 2026-09-08, hardware not fitted)
+
+G-code drives these directly: **M7 = mist, M8 = air blast, M9 = both off.** There is no flood
+system, so `coolant-flood` is repurposed as the blast — which gives independent control of coolant
+and chip clearing from the program.
+
+| Function | Octopus pin | HAL |
+|---|---|---|
+| Mist solenoid | `PA_8` (FAN0 MOSFET) | `remora.output.00` ← `iocontrol.0.coolant-mist` |
+| Air blast solenoid | `PE_5` (FAN1 MOSFET) | `remora.output.01` ← `iocontrol.0.coolant-flood` |
+
+**Use the FAN/HEATER MOSFET outputs, not a bare GPIO.** They are low-side switches with
+pulled-down gates, so they are off through boot and reset — the same reasoning that governs the
+spindle enable relay. A bare 3.3 V pin cannot drive a 24 V solenoid at all.
+
+🚨 **Flyback diode across each solenoid coil.** An inductive load on a bare MOSFET kills the FET on
+the first switch-off.
+
+**Why gating the air matters beyond tidiness:** the CAT 8010 is rated 70/30 duty with a stated
+60-minute continuous ceiling. Running blast continuously through a long job exceeds the
+compressor's own specification. On M8 it flows only during cuts, which is what brings a small
+quiet compressor inside its rating — see the compressor sizing in [[plasma-table-plan]].
+
+⚠️ Pin numbers are from the standard Octopus v1.1 pinout. Verify against the silkscreen, and
+confirm the new modules parsed by reading the boot banner — a mistyped key shows up there and
+nowhere else.
+
 ## Still open
 
 | # | Item | State |
