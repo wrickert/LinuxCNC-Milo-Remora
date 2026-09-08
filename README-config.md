@@ -697,12 +697,42 @@ text. It is also a European shop, so check shipping before assuming it beats $39
 #### Tier 2 — full DIY
 | Part | What to use | Notes |
 |---|---|---|
-| Reservoir | **A garden pressure sprayer** | Already a rated low-pressure vessel with fill cap, pump and usually a relief valve, for very little. 🚨 **Do NOT 3D print a pressure vessel** — FDM layer adhesion, and a bad failure mode. |
+| Reservoir | **A water filter housing** — threaded sump + ported head | See the note below. Better than a garden sprayer in every way that matters. 🚨 **Do NOT 3D print a pressure vessel** — FDM layer adhesion, and a bad failure mode. |
 | Regulator | **0–30 psi** | A 0–125 psi regulator cannot set 10–20 psi with any precision. |
 | Coolant flow | small brass **needle valve** on the fluid line | This is the fine-adjustment that matters. |
 | Air flow | needle or ball valve on the air line | Independent adjustment is the entire point. |
 | Check valve | on the fluid line | Stops air backing into the reservoir and coolant into the air line. |
 | Nozzle | **coaxial** — ~1–1.5 mm coolant tube inside/alongside a ~4–6 mm air tube, terminating together | Machine it on the Milo. Coolant must be introduced **at or just past the exit plane**. |
+
+#### 🛢 The reservoir: use a water filter housing
+
+The standard threaded-sump water filter housing — the kind used for whole-house filtration, RO
+pre-filters and aquarium water prep. The screw-off bowl is the **sump**; the top with the ports is
+the **cap** or **head**.
+
+Why it beats a garden sprayer:
+
+- **Rated around 125 psi** against a sprayer's ~40–60, and this needs only 10–20.
+- **The head already has two threaded ports** — so there is *no drilling or tapping a pressure
+  vessel*, which was the ugly part of the sprayer plan. And two is exactly the number needed:
+  **air into the headspace through one, coolant out through the other via a dip tube.**
+- **Clear sumps exist**, which gives you the level window the LUBE CUBE advertises as a feature.
+- Screw-off sump for filling and cleaning; mounts on a standard bracket.
+
+Standard sizes: **10″ or 20″ long**, in **2.5″ ("slim line")** or **4.5″ ("Big Blue")** diameter.
+
+⚠️ **Two things to check before buying:**
+1. **Sump material vs coolant.** Polypropylene is fine with water-soluble coolant. **Clear sumps
+   are often SAN or styrene and can craze or embrittle with neat oils** — if running a neat
+   lubricant rather than a water mix, take the opaque PP sump and give up the level window.
+2. **Port size.** Prefer a **1/4″–1/2″ NPT** head; the 1″ ports on Big Blue housings are far more
+   adapting than you want to reach 4 mm tube.
+
+The **dip tube is the one part to fabricate** — a length of tube through the outlet port reaching
+near the bottom of the sump, sealed at the port. Everything else threads together.
+
+📌 Same form factor already exists in the air line: the bowl on a water separator is this idea at
+small scale.
 
 #### 🔑 The valve detail that makes it work with `milo.hal`
 **Use a 3/2 (three-port, two-position) solenoid, not a 2/2.**
@@ -713,8 +743,8 @@ instant the output drops. Same 24 VDC NC coil, same `remora.output.00`, same FAN
 flyback diode — just the right valve type.
 
 #### What this leverages
-The Milo can machine its own nozzle; the printer can make brackets, the reservoir cradle and a
-Loc-Line mount (but **not** the pressure vessel). The expensive part of the commercial unit is the
+The Milo can machine its own nozzle; the printer can make brackets, a housing
+mount and a Loc-Line holder (but **not** the pressure vessel). The expensive part of the commercial unit is the
 head; almost everything else is a fitting.
 
 #### 💡 Better Tier-2 starting point: a cheap tank kit as the donor
