@@ -546,6 +546,48 @@ unwired input would read "not live" forever and lock the machine in E-stop.
 ⚠️ When uncommenting, **delete the direct `net remora-status … => iocontrol.0.emc-enable-in`
 line** — HAL will refuse two drivers on one signal.
 
+### Does the physical e-stop replace pressing F1? No — and that is deliberate
+
+Worth being precise, because the two are doing different jobs.
+
+| Pin | What it is |
+|---|---|
+| `iocontrol.0.emc-enable-in` | the **external** e-stop input. FALSE forces LinuxCNC into e-stop and **holds it there** |
+| `iocontrol.0.user-enable-out` | goes TRUE when the operator clears e-stop in the GUI (F1) |
+| `iocontrol.0.user-request-enable` | pulses when the operator *requests* enable |
+
+Wiring the contactor aux to `emc-enable-in` makes LinuxCNC **follow** the hardware: hit the
+mushroom and it drops into e-stop instantly, and it will refuse to clear while the button is
+latched. But **releasing the mushroom does not re-enable the machine.** You still perform a
+deliberate clear.
+
+🔑 **That is a safety property, not an annoyance.** Machine power must never come back the instant
+someone twists a mushroom out — re-enabling is an intentional act by someone who has looked at the
+machine. It is also why "E-stop won't clear" is a *symptom to diagnose*, not something to defeat
+(see the WDRESET section).
+
+It can be made to auto-clear in HAL. Don't.
+
+### Replacing F1 with a physical button — the right way to do it
+
+The industrial pattern is **red latching mushroom to stop, green momentary button to reset**. That
+is what the contactor topology was reworked for. With `halui` loaded (`[HAL] HALUI = halui` in
+`milo.ini`):
+
+```
+# green reset button on a spare Octopus input
+net estop-reset  remora.input.05 => halui.estop.reset
+net machine-on   remora.input.05 => halui.machine.on
+```
+
+⚠️ Driving both from one input fires them simultaneously; if the machine does not come up in one
+press, sequence them — reset first, then `machine.on` — with a `oneshot` or simply two presses.
+
+✅ **This cannot defeat the hardware.** `halui.estop.reset` is a *software* reset; while the
+mushroom is latched, `emc-enable-in` stays FALSE and LinuxCNC re-asserts e-stop immediately. The
+button can only clear the software state once the hardware already permits it. Keyboard F1 remains
+available either way.
+
 ## 💧 Mist coolant + air blast (config written 2026-09-08, hardware not fitted)
 
 G-code drives these directly: **M7 = mist, M8 = air blast, M9 = both off.** There is no flood
