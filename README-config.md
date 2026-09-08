@@ -716,6 +716,41 @@ The Milo can machine its own nozzle; the printer can make brackets, the reservoi
 Loc-Line mount (but **not** the pressure vessel). The expensive part of the commercial unit is the
 head; almost everything else is a fitting.
 
+#### 💡 Better Tier-2 starting point: a cheap tank kit as the donor
+
+Amazon prices, checked live 2026-09-08:
+
+| Tier | Price | What you get |
+|---|---|---|
+| Bare mister | **$9.99 – $18.88** | venturi nozzle, Loc-Line, magnetic base, needle valve, tubing |
+| Mid | **~$35.99** | as above, a bit more plumbing |
+| **Tank unit** | **$96.99 – $109.98** | **3 L pressurised tank + solenoid valve + air filter/regulator + 2 nozzles + Loc-Line** |
+
+They are all sold as "mist" / "oil mist" sprayers, so assume the **nozzle atomises** — that is the
+thing we ruled out for an indoor machine.
+
+**But look at the architecture of the $97–110 units.** A pressurised reservoir feeding a nozzle,
+gated by a solenoid, with filtered/regulated air — that is *structurally the same* as a Fog Buster.
+The reservoir is pressurised, not siphoned. **The only questionable part is the nozzle.**
+
+So one of those is arguably the best possible starting point for Tier 2: it hands you the tank,
+the solenoid, the air filter, the fittings and the Loc-Line in one box for around $100 — the whole
+plumbing list — and leaves you exactly one part to evaluate and, if it fogs, replace with the
+coaxial nozzle described above.
+
+Even the $10 units are worth it purely as parts donors for the **air blast** leg: Loc-Line,
+magnetic base and a needle valve for less than buying them individually.
+
+⚠️ Check the solenoid's coil voltage before assuming it drops into `remora.output.00` — these kits
+commonly ship 110 V or 220 V AC coils. Same issue as the LUBE CUBE. A 24 VDC replacement is cheap.
+
+#### ⚖️ Honest calibration on the atomising point
+The non-atomising preference is real and it is why the expensive units exist — but it **scales with
+duty and ventilation**, and this file has been firm to the point of sounding absolute. Occasional
+light use with airflow is not the same risk as hours a day in a room of the house. The reason it
+matters *here* is specifically that the new place has no garage, so the machine's air is the
+household's air. Judge it on how much cutting actually happens.
+
 ## Still open
 
 | # | Item | State |
