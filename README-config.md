@@ -577,7 +577,8 @@ nowhere else.
 ### Parts list — mist coolant + air blast
 
 **1. The mist unit — get a non-atomizing one.** This is the decision that matters, and it matters
-more given the machine is indoors with no garage.
+more given the machine is indoors — see the siting note below; the workshop is at the Church
+with real ventilation, which relaxes this considerably.
 
 | | Non-atomizing (Fog Buster / Tormach LUBE CUBE / HVLP MQL) | Venturi "mist" kits (cheap eBay/Amazon) |
 |---|---|---|
@@ -748,8 +749,11 @@ commonly ship 110 V or 220 V AC coils. Same issue as the LUBE CUBE. A 24 VDC rep
 The non-atomising preference is real and it is why the expensive units exist — but it **scales with
 duty and ventilation**, and this file has been firm to the point of sounding absolute. Occasional
 light use with airflow is not the same risk as hours a day in a room of the house. The reason it
-matters *here* is specifically that the new place has no garage, so the machine's air is the
-household's air. Judge it on how much cutting actually happens.
+⚠️ **Superseded 2026-09-08:** the workshop is at **the Church** — a dedicated space with powerful
+ventilation and additional filtration, not a room of the house. That removes the premise the
+non-atomising preference rested on. **The cheap atomising kits are a reasonable buy.**
+Non-atomising is still nicer for coolant economy and for not coating the machine, but that is now
+a preference, not a health call.
 
 ## Still open
 
