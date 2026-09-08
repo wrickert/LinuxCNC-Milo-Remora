@@ -785,6 +785,43 @@ non-atomising preference rested on. **The cheap atomising kits are a reasonable 
 Non-atomising is still nicer for coolant economy and for not coating the machine, but that is now
 a preference, not a health call.
 
+### 🧪 Coolant choice — decided 2026-09-08: neat MQL oil
+
+Three families are used at hobby level:
+
+| | Examples | For | Against |
+|---|---|---|---|
+| **Water-mix, general** | **Koolmist 77** | cheap, cools well, everywhere | *"doesn't do a ton for lubrication and surface finishes"*; reports of rust and tank-life trouble |
+| **Water-mix, semi-synthetic** | **Trim MicroSol 585XT / 690XT** | high-lubricity microemulsion, long sump life, good foam control, ~1 gal at sane money | still water — still goes off, still conductive |
+| **Neat MQL oil** | **Unist Coolube 2210** (**2210AL** aluminium / **2210EP** steel) | vegetable-based, no water, *"no cleanup except a light film that wipes off easily"* | dearer per litre; less outright cooling |
+
+**Decision: Unist Coolube 2210AL.** Four things about *this* machine in *this* place decide it:
+
+1. **Intermittent use in a shared workshop.** A water emulsion sitting unused in a reservoir goes
+   rancid and smells. That is the practical killer of water-based fluid in a space that is not
+   solely yours and is not used daily.
+2. **Aluminium at 24 000 rpm on 1/8" cutters wants lubricity, not heat capacity.** Built-up edge
+   and chip welding are the failure modes here, and they are lubrication problems. MQL is a
+   lubrication strategy; that is the right lever for this work.
+3. **🚨 Water-based emulsions are electrically conductive.** The Milo is an *open* machine with the
+   electronics enclosure right beside it. A light oil film is far more benign next to a live 24 V
+   board than a conductive water mix.
+4. **MQL consumption is tiny**, so the higher price per litre is close to irrelevant per job —
+   Fog Buster reckon an 8 oz reservoir lasts about a year.
+
+**Honest counterpoint:** Koolmist 77 and Trim MicroSol are cheaper and perfectly usable, and for
+deeper cuts — especially in steel — water genuinely wins on cooling, partly through evaporation.
+If the work shifts that way, **2210EP** is the steel variant, or keep a water mix for those jobs.
+
+#### 🔗 This decision is coupled to two others — order them together
+- **Sump material.** Neat oil ⇒ **opaque polypropylene sump**. Clear SAN/styrene sumps can craze
+  and embrittle with neat oils, so the level window is off the table. Do not buy the clear one and
+  then choose the oil.
+- **LUBE CUBE compatibility**, if that route is ever revisited: its spec explicitly requires
+  *"MQL-safe coolant, not pure water, alcohols or other solvents"*. Coolube satisfies that; a water
+  mix would not.
+
+
 ## Still open
 
 | # | Item | State |
