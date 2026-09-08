@@ -588,6 +588,69 @@ mushroom is latched, `emc-enable-in` stays FALSE and LinuxCNC re-asserts e-stop 
 button can only clear the software state once the hardware already permits it. Keyboard F1 remains
 available either way.
 
+## 🔗 The full safety chain — two chains, not one
+
+The intended end state is several conditions all satisfied before the machine can be enabled.
+Correct. But they belong in **two separate chains**, and conflating them is the classic error.
+
+### Chain 1 — hardware, in copper. This is the safety function.
+Normally-closed contacts **in series**, feeding the contactor coil. Break any one and the
+contactor drops out. No software involved, nothing to crash or hang.
+
+- E-stop mushroom (latching, NC)
+- Any additional e-stop station / pendant, in series — **this is what the contactor rework was for**
+- Guard or enclosure interlock, if the machine ever gets enclosed
+- Thermal / overload contacts
+
+🚨 **Nothing that is not an emergency stop belongs in this chain.** Power-good and spindle feedback
+are not emergency stops.
+
+### Chain 2 — software permissive, in HAL. This is awareness and interlock.
+Conditions ANDed into `iocontrol.0.emc-enable-in`. Use the `logic` component rather than a stack
+of `and2`s:
+
+```
+loadrt logic names=safety-chain personality=0x104   # AND, 4 inputs
+addf safety-chain servo-thread
+
+net link-ok       remora.SPI-status   => safety-chain.in-00
+net contactor-ok  remora.input.04.not => safety-chain.in-01
+net psu-ok        remora.input.05.not => safety-chain.in-02
+net vfd-ok        remora.input.06.not => safety-chain.in-03
+net machine-ok    safety-chain.and    => iocontrol.0.emc-enable-in
+```
+
+`.not` on the physical ones because dry contacts pull the input to GND. Check the pin names against
+`man logic` before relying on them.
+
+### 🚨 What NOT to put in Chain 2 — over-eager e-stop is its own hazard
+
+**An e-stop mid-cut is not free.** It stops the axes *and* the spindle with the tool buried in the
+work — that can weld the cutter in, break it, or move the part. A chain that trips on
+not-really-emergencies trains you to ignore it, which is worse than not having it.
+
+| Signal | Where it belongs |
+|---|---|
+| SPI link lost | **Chain 2** — no control at all |
+| Contactor dropped / power gone | **Chain 2** — commanding dead drivers |
+| 24 V PSU DC-OK (if the PSU has one) | **Chain 2** |
+| VFD *fault* output | **Chain 2** — the spindle has failed |
+| **Spindle at-speed** | ❌ **NOT the e-stop chain.** This is `spindle.0.at-speed`, which gates *feeding*. Motion waits for it after M3 natively |
+| Coolant low / air pressure low | ❌ warning or program pause, not e-stop |
+
+### 🔎 Add a first-out indicator, or you will regret the AND
+
+With four inputs ANDed, "the machine won't enable" tells you nothing about **which** one is false.
+This repo already documents that exact confusion once — "E-stop won't clear" turning out to mean
+the SPI link was down. `halcmd show pin safety-chain` answers it, but a status readout in the GUI
+is better. Wire the chain and the diagnosis together, not the chain alone.
+
+### One more thing the e-stop should do
+Killing VFD mains leaves a 24 000 rpm spindle coasting for a long time with the tool in the work.
+The e-stop should **also** command the VFD to brake via its own safe-stop / external-fault input,
+with the contactor as the backstop behind it. Decide that before the panel is built — it is a
+wiring change, not a setting.
+
 ## 💧 Mist coolant + air blast (config written 2026-09-08, hardware not fitted)
 
 G-code drives these directly: **M7 = mist, M8 = air blast, M9 = both off.** There is no flood
