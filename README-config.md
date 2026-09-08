@@ -651,6 +651,45 @@ The e-stop should **also** command the VFD to brake via its own safe-stop / exte
 with the contactor as the backstop behind it. Decide that before the panel is built — it is a
 wiring change, not a setting.
 
+### H100 VFD — does it have the stop input? Yes, but it is not STO
+
+Read out of the *H100 Series High Performance Vector Control Inverter* manual (the generic Chinese
+H100, **not** LS Electric's LSLV-H100 — very different drives sharing a name).
+
+**✅ Emergency stop input exists.** Six multi-function digital inputs — FOR(X1), REV(X2), RST(X3),
+SPH(X4), SPM(X5), SPL(X6) — set by **F044–F049**. Assign **function `13` = Emergency stop** to a
+spare one. (Defaults: F044=02 Forward, F045=03 Reverse, F046=14 Reset, F047/48/49 = High/Medium/Low
+speed.) Function `14` = Reset is also available if a reset button is wanted.
+
+**✅ And it can brake rather than coast** — which was the whole point. **`F022` = emergency stop
+deceleration time**:
+
+| F022 | Behaviour |
+|---|---|
+| `0.0` | emergency stop **coasts** — the 24 000 rpm spindle freewheels with the tool in the work |
+| `0.1–6500.0 s` | controlled deceleration over that time |
+
+⚠️ **Do not set it too short.** Decelerating a spinning spindle pushes energy back into the DC bus;
+without a braking resistor an aggressive ramp trips on overvoltage. Start around 1–2 s and shorten
+it only as far as it will reliably go.
+
+**✅ A relay for the software chain.** `F053` drives the **FA / FB / FC** form-C relay and already
+defaults to `3` = Fault indication. But for the permissive chain, **use `21` = "Ready for
+operation" instead**, and wire the normally-open contact.
+
+> 🔑 **Why "ready" beats "fault":** pick the function *and* the contact so that **de-energised means
+> unsafe**. With "Ready" on the NO contact, a drive that loses power or hangs stops asserting ready
+> and the chain opens. With "Fault" on the NC contact, a dead drive also stops asserting fault — so
+> it reads healthy while being dead. Verify the relay's energisation direction with a meter before
+> trusting either.
+
+**❌ There is no Safe Torque Off.** Nothing in the manual — no STO, no safety-rated stop function.
+
+So function 13 gives a **functional** stop that depends on the drive's firmware behaving. That is
+genuinely useful — it is what makes the spindle brake instead of coast — but it is **not** a
+substitute for breaking power. **The contactor remains the actual safety function**, exactly as in
+Chain 1 above. Use both: function 13 for the fast controlled stop, the contactor as the backstop.
+
 ## 💧 Mist coolant + air blast (config written 2026-09-08, hardware not fitted)
 
 G-code drives these directly: **M7 = mist, M8 = air blast, M9 = both off.** There is no flood
