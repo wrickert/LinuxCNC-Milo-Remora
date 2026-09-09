@@ -799,6 +799,50 @@ and adds dual-channel monitoring — it detects a welded contact or a shorted wi
 monitored reset. That is how a commercial machine does it. For a hobby mill a plain contactor with
 the seal-in above is the normal pragmatic choice; the safety relay is worth knowing exists.
 
+## 🔌 Pi power: use a DC-DC off the 24 V, not a second USB-C brick
+
+### Why the USB-C route is worse than it looks
+The Pi 5 wants **5.1 V at 5 A (27 W)**. The trap:
+
+> 🚨 **5 V/5 A is not a standard USB-PD profile.** Standard fixed PDOs are 5 V/3 A, 9 V/3 A,
+> 15 V/3 A, 20 V/3 A. **Most USB-C chargers — even 100 W ones — only offer 5 V/3 A**, delivering
+> their headline wattage at 9/15/20 V, which the Pi cannot use.
+
+On a 3 A supply the Pi runs but **caps total USB peripheral current at 600 mA** and warns. That is
+almost certainly what has been happening with the supply that has been browning out since
+2026-09-04. So "buy a bigger charger" mostly does not work — you need one that specifically
+advertises a **5 V/5 A PDO**, which in practice means the official Raspberry Pi 27 W supply.
+
+### ✅ The DC-DC is the better answer, and the topology already supports it
+
+**24 V → 5.1 V, 5 A minimum (6 A is better).** A DIN-rail module suits a panel — Mean Well
+`DDR-30G-5` (5 V, 6 A) or similar.
+
+Three reasons it wins:
+1. **It sidesteps PD entirely.** Nothing to negotiate; you simply hand the Pi clean 5 V.
+2. **One supply, one power domain.** No second brick, no second outlet, one less thing to fail.
+3. 🔑 **It is already the design.** The 24 V PSU sits **upstream of the contactor**, permanently
+   powered, so the e-stop cannot kill the supply that re-energises the coil. A DC-DC off that rail
+   means **the Pi stays alive through an e-stop** — which is exactly the property argued for at the
+   very start of this project.
+
+### 🚨 Wire it to the ALWAYS-ON 24 V, not the switched VM rail
+This is the one that must not be got wrong. The contactor switches the Octopus's **VM stepper
+rail**; the 24 V PSU itself is upstream and permanent. **Take the DC-DC from the permanent side.**
+Off the switched side, every e-stop kills the Pi — the precise failure this whole topology exists
+to prevent.
+
+### Practical notes
+- **Set it to 5.1 V, not 5.0** — same as the official supply, to allow for connector and lead drop.
+  The Pi flags under-voltage at about 4.63 V at the connector.
+- **Feed the GPIO 5 V pins** (2/4) and GND (6). ⚠️ This bypasses the Pi's own input protection —
+  no fuse, no reverse protection — so use a properly regulated module and fuse the input yourself.
+- Add **`usb_max_current_enable=1`** to `/boot/firmware/config.txt` if the 600 mA USB cap bites.
+- Bulk capacitance at the Pi end, and pick a module with decent filtering — there is a 1.5 kW VFD
+  in the same panel.
+- 📌 **Keep one known-good USB-C supply on the shelf as a diagnostic**, so "is it the DC-DC?" is a
+  two-minute question rather than a theory.
+
 ## 🎛 Control panel / pendant — how they work, and what to build
 
 ### Two separate things: the fixed CONSOLE and the handheld PENDANT
