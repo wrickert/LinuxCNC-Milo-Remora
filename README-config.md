@@ -797,6 +797,84 @@ and adds dual-channel monitoring — it detects a welded contact or a shorted wi
 monitored reset. That is how a commercial machine does it. For a hobby mill a plain contactor with
 the seal-in above is the normal pragmatic choice; the safety relay is worth knowing exists.
 
+## 🎛 Control panel / pendant — how they work, and what to build
+
+### The three ways these are built
+
+| Approach | How | Fit here |
+|---|---|---|
+| **Commercial USB pendant** (XHC WHB04B-6 etc.) | USB or 2.4 GHz + dongle; LinuxCNC ships drivers (`xhc-whb04b-6`) | Easy. Wireless ones are genuinely nice for jogging — you can walk round the machine |
+| **USB HID keypad** | any cheap macro keypad / numpad, read by **`hal_input`** (evdev) | ~17 buttons for pocket money, zero wiring. **Buttons only — no analog** |
+| **Direct-wired to controller IO** | switches into spare inputs → `halui.*` pins | ✅ **Best fit for this machine** |
+
+**Recommendation: wire it into the Octopus.** You already have spare inputs, so there is no USB
+device, no extra driver, no separate failure mode — and the panel lives inside the same fail-safe
+framework as the endstops and the contactor aux. USB pendants exist mostly for people whose
+controller has no spare IO. You are not that person.
+
+⚠️ `halui` must be loaded — `[HAL] HALUI = halui` in `milo.ini`. Confirm pin names on your version
+with `halcmd show pin halui`; they have moved between releases.
+
+### 🚨 The override problem: Remora exposes no analog input
+
+Feed % and spindle % are the controls you actually want, and they are the awkward ones.
+`remora-spi.c` creates **no analog and no encoder pins** — only `input.NN`, `output.NN`, `SP.N`,
+`PV.N`. So a potentiometer has nowhere to go.
+
+**Solution: use rotary encoders and let LinuxCNC do the counting.** Two digital inputs per knob,
+decoded by the software `encoder` component:
+
+```
+loadrt encoder num_chan=2
+addf encoder.update-counters  servo-thread
+addf encoder.capture-position servo-thread
+
+net fo-a  remora.input.06 => encoder.0.phase-A
+net fo-b  remora.input.07 => encoder.0.phase-B
+net fo    encoder.0.counts => halui.feed-override.counts
+
+net so-a  remora.input.08 => encoder.1.phase-A
+net so-b  remora.input.09 => encoder.1.phase-B
+net so    encoder.1.counts => halui.spindle-override.counts
+```
+
+Detented encoders are **better than pots** here anyway: no drift, no scratchy wiper, and one detent
+= one step. Sampling is at the 1 kHz servo rate, which is ample for a hand-turned knob.
+
+**Cheaper still:** `halui.feed-override.increase` / `.decrease` from two plain buttons. One input
+each instead of two, no encoder component. Less pleasant, perfectly workable.
+
+### What to put on it, in order of how much you will actually use it
+
+1. **E-stop** — hardware mushroom, in the contactor coil chain. Not a `halui` pin.
+2. **🔑 Feed hold / pause** → `halui.program.pause` + `.resume`. **The most underrated button on any
+   machine.** It is what you should reach for when something looks wrong but is not an emergency —
+   people hit E-stop instead, which is harsher, loses position and wears the contactor.
+3. **Cycle start** → `halui.program.run`
+4. **Feed override** → encoder, as above
+5. **🔑 Rapid / max-velocity override** → `halui.max-velocity.*`. Underrated: it is what makes the
+   first air-cut of a new program survivable. Arguably more valuable than feed override.
+6. **MPG jog wheel + axis select + step size** — transforms touch-off and setup. The one place a
+   wireless pendant genuinely beats a fixed panel.
+7. **Spindle override** → encoder
+8. **Machine on / e-stop reset** → `halui.machine.on`, `halui.estop.reset` (see the e-stop section)
+9. **Mist / air blast toggle** → `halui.mist.on/off`, `halui.flood.on/off` — pairs with the M7/M8
+   outputs already wired. A manual blast button for clearing chips is used constantly.
+10. **Home all** → `halui.home-all`
+
+### 🔑 The sleeper feature: MDI buttons
+`halui.mdi-command-00` … `NN` fire **arbitrary G-code** from a physical button, declared in the
+INI's `[HALUI]` section. "Go to tool-change position", "spindle to 8000", "probe Z" — each becomes
+one button. This is where a custom panel beats any commercial pendant, because the buttons do
+*your* jobs rather than generic ones.
+
+### Pin budget
+DIAG0–7 gives eight inputs; five are already spoken for (3 endstops, toolsetter, contactor aux),
+leaving `PG_13`/`PG_14`/`PG_15`. A useful panel wants ~12 inputs, so plan to use other free Octopus
+headers — the unused MOTOR sockets' step/dir/enable pins are all just GPIO. **Or** split it: buttons
+on a USB numpad via `hal_input`, encoders wired to Remora. That combination costs almost nothing and
+sidesteps the pin budget entirely.
+
 ## 💧 Mist coolant + air blast (config written 2026-09-08, hardware not fitted)
 
 G-code drives these directly: **M7 = mist, M8 = air blast, M9 = both off.** There is no flood
