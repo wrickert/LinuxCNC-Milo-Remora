@@ -801,6 +801,93 @@ the seal-in above is the normal pragmatic choice; the safety relay is worth know
 
 ## 🎛 Control panel / pendant — how they work, and what to build
 
+### Two separate things: the fixed CONSOLE and the handheld PENDANT
+
+They solve different problems and should be designed separately.
+
+**The console** is the sloped box that sits under the monitor — the one in the reference photo, a
+few illuminated pushbuttons and an e-stop mushroom. It carries the controls you use **while a
+program is running**, from where you stand to watch it.
+
+**The pendant** is handheld and carries the controls you use **while setting up** — jog wheel,
+axis select, step size — from wherever you need to put your eye near the tool.
+
+---
+
+## 🎛 The fixed console — what that box actually is
+
+It is a **22 mm pushbutton station**. That is the whole trick: **22 mm is the industry-standard
+panel cutout** (IEC 60947), so every e-stop, illuminated button, selector switch, key switch and
+lamp from every manufacturer drops into the same hole.
+
+- **Cheap generic**: LA38 / XB2 style from the usual places — fine for this
+- **Proper**: Schneider Harmony XB4/XB5, Eaton M22, Siemens 3SU
+
+Each button is a **head** plus one or more **contact blocks** (NO / NC) that clip on the back, so
+you specify the action separately from the button. An e-stop head takes an **NC block** — that is
+what goes in series in the contactor coil chain.
+
+### 🔑 Buy illuminated buttons — the lamps are free state feedback
+22 mm illuminated heads take a 24 V LED module, and you have spare `remora.output.NN` pins to drive
+them. So the console can *show* machine state rather than just accept input:
+
+| Lamp | Driven from |
+|---|---|
+| Cycle start lit | program running |
+| Feed hold lit | program paused |
+| Machine on lit | `emc-enable-in` satisfied — i.e. **the whole safety chain is happy** |
+
+That last one solves the first-out problem from the safety-chain section in the most direct way
+possible: a lamp that is dark tells you the chain is broken before you go looking at a terminal.
+
+### The enclosure
+- **Buy**: empty 2/3/4/5-hole pushbutton stations are cheap, or a sloped desktop console
+  (Hammond 1456/1457, Bopla, OKW).
+- **Print it**: the Snapmaker will do a sloped console with 22 mm holes easily, and you can make it
+  fit the bench exactly.
+  🚨 **But the e-stop must survive being hit hard with a palm.** A thin printed panel that flexes or
+  cracks is a real failure. Print it thick in PETG/ASA — not PLA — or set the e-stop in a metal
+  sub-panel and print only the surround.
+
+### What goes on it
+Matching the photo, plus the overrides you asked about:
+
+| Control | Type | HAL |
+|---|---|---|
+| **E-stop** | 22 mm mushroom, NC block | ❌ not a HAL pin — series in the contactor coil |
+| **Cycle start** | 22 mm illuminated NO | `halui.program.run` |
+| **Feed hold** | 22 mm illuminated NO | `halui.program.pause` / `.resume` |
+| **Stop / abort** | 22 mm NO | `halui.abort` |
+| **Machine on / reset** | 22 mm illuminated NO | `halui.estop.reset` + `halui.machine.on` |
+| **Feed %** | panel-mount rotary encoder | `halui.feed-override.counts` (see above) |
+| **Spindle %** | panel-mount rotary encoder | `halui.spindle-override.counts` |
+| **Rapid %** | panel-mount rotary encoder | `halui.max-velocity.*` |
+
+⚠️ The encoders are **not** 22 mm — they are ordinary panel-mount parts wanting roughly a 10 mm
+hole. Mixed hole sizes are a non-issue on a printed panel, and a reason to print rather than buy a
+fixed station. (22 mm potentiometers exist, but Remora has no analog input — see above.)
+
+---
+
+## 🎚 The pendant — and the wchSmartKnob is a genuinely good fit
+
+A motorised haptic knob is an unusually good CNC pendant, because the thing that makes a pendant
+good is **feel**, and [[wchsmartknob]] can change its feel in firmware:
+
+- **Coarse detents for step jog, fine detents for MPG** — same knob, different mode, no switch
+- **A detent at exactly 100 %** on feed and spindle override, so you can find neutral by touch
+  without looking away from the cut
+- **Rising resistance as an axis approaches a soft limit** — the knob physically fights you before
+  the machine refuses. No commercial pendant does this.
+
+Talking to LinuxCNC: either present as USB HID and read it with **`hal_input`**, or — better — a
+small **userspace HAL component** over USB serial exposing position/button/mode pins. Userspace
+components are straightforward in Python via the `hal` module.
+
+🚨 **Boundary that must not move: a USB device is never in the safety chain.** Jogging and overrides
+over USB are fine — they are operator convenience. **E-stop stays in copper on the console.** If the
+knob unplugs, you lose convenience, not safety.
+
 ### The three ways these are built
 
 | Approach | How | Fit here |
