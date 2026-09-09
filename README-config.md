@@ -900,6 +900,62 @@ Six conductors in one jacket. That is the win, and it is a real one.
 4. **Ground loop.** USB carries ground between the Pi and the console. If the console also touches
    the machine frame you have a loop. Isolated USB, or RS-485 with isolation, avoids it.
 
+### ✅ The heartbeat is a stock LinuxCNC component: `watchdog`
+
+Not something to build — `watchdog` is a standard realtime component whose entire job is this.
+
+```
+loadrt watchdog num_inputs=1        # 1 to 32 inputs
+addf watchdog.process servo-thread  # ⚠️ confirm the function name with `man watchdog`
+
+setp watchdog.timeout-0 0.5         # seconds without a transition = fault
+net console-hb  <console-heartbeat> => watchdog.input-0
+net console-ok  watchdog.ok-out
+```
+
+| Pin | Role |
+|---|---|
+| `watchdog.input-N` | the monitored heartbeat — must **transition**, not merely be held high |
+| `watchdog.timeout-N` | parameter, seconds |
+| `watchdog.ok-out` | goes **false** when any input stops toggling |
+| `watchdog.enable-in` | re-arm after a fault by toggling it false→true |
+
+⚠️ **Check `enable-in`'s polarity against `man watchdog` on the machine** — the online summary reads
+ambiguously, and it is the one field worth confirming rather than assuming.
+
+The console just toggles a bit every loop. From a Python userspace component that is one line.
+
+### 🔑 What to actually do with `console-ok` — less than you would think
+
+The instinct is to e-stop on console loss. **Don't** — that is the over-eager e-stop hazard from
+the safety-chain section. Losing the console mid-program is a *degraded* state, not an emergency:
+the program is running fine, the physical e-stop still works, and the keyboard still works.
+
+Work through what actually freezes:
+
+| Input | Frozen behaviour | Dangerous? |
+|---|---|---|
+| Buttons | stop responding | ❌ no — annoying only |
+| Feed / spindle override | **holds its last value** | ❌ no — a stuck override is benign |
+| **Jog** | **may hold a motion command** | 🚨 **yes — this is the one** |
+
+So: **gate jog on `console-ok`, and leave everything else alone.**
+
+```
+loadrt and2 count=1
+net console-ok               => and2.0.in0
+net jog-request  <console>   => and2.0.in1
+net jog-enabled  and2.0.out  => halui.jog.0.plus
+```
+
+📌 And drive the overrides with **`halui.feed-override.increase` / `.decrease`** rather than
+`.counts`/`.value`. A dead console then simply stops changing the override instead of needing a
+forced fallback — the simpler design is also the safer one here.
+
+🚨 **Raise the alert somewhere that is not the console.** The machine-on lamp lives *on* the console,
+so if the console is dead you cannot see its lamp. Put the console-lost indication in the GUI too,
+or you have a silent failure with a status light that cannot report it.
+
 ### The industrial answer, if you want it
 **One shielded multicore carrying the e-stop pair, an RS-485 pair, and 24 V for the lamps.** Since
 you are pulling a cable for the e-stop anyway, the extra two conductors are free. Differential,
