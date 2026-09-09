@@ -570,6 +570,20 @@
       <p><strong>It needs a normally-open auxiliary contact</strong> for the LinuxCNC feedback into <span class="mono">remora.input.04</span>. The MC-9b listing does not mention one — either find a variant with an integrated aux or budget for a clip-on block.</p>
       <p><strong>Three poles is the right count</strong>: VFD line, VFD neutral, and the 24&nbsp;V VM rail. The Heschen is two-pole, so it is cheaper but you would need two of them, and modular lighting contactors usually have no aux contact at all. The UL listing on the MC-9b is worth the difference in a shared workshop.</p>
     </div>
+    <div class="callout">
+      <span class="ch">Why not a $3.50 adjustable buck module for the Pi</span>
+      <p>The generic 4–38&nbsp;V adjustable modules (XL4015-class, ~$3.50 each in a 4-pack) are fine for plenty of jobs. <strong>The Pi is not one of them</strong>, for three specific reasons — none of which a carrier PCB or a printed DIN clip would fix:</p>
+      <p><strong>1. The trimpot.</strong> Output is set by a tiny pot that can drift or be knocked. Feeding the GPIO header <em>bypasses every protection the Pi has</em> — no fuse, no reverse protection. A pot that walks up to 6&nbsp;V is a dead Pi. A fixed-output module sets its voltage with precision resistors that cannot be nudged.</p>
+      <p><strong>2. "5&nbsp;A" is not 5&nbsp;A at this ratio.</strong> 24&nbsp;V → 5&nbsp;V is a 4.8:1 step-down, so duty cycle is ~21&nbsp;%, ripple current is high and switch dissipation is significant. These parts derate hard; realistically ~2.5–3&nbsp;A continuous without forced air. <strong>The Pi&nbsp;5 wants up to 5&nbsp;A.</strong></p>
+      <p><strong>3. Transient response — and this is the one that stings.</strong> The Pi slews amps in microseconds when cores boost, and it trips on under-voltage at about 4.63&nbsp;V. A slow control loop with minimal output capacitance droops exactly there. <strong>That is the brownout failure you have already spent days chasing.</strong> Do not reintroduce it with a cheaper part.</p>
+      <p>Isolation, incidentally, is <em>not</em> a good argument either way here — everything shares ground with the Octopus regardless.</p>
+    </div>
+    <div class="callout note">
+      <span class="ch">If you do want to build it</span>
+      <p>Then <strong>build the converter, not a carrier for someone else's.</strong> A carrier board around an XL4015 is still an XL4015 with a pot. A proper fixed-output synchronous buck — voltage set by 1&nbsp;% resistors, real bulk capacitance, a fuse on the input — would beat the Mean&nbsp;Well and cost less in parts. That is a genuinely nice small PCB project.</p>
+      <p>📌 But <strong>buy the DDR-30G-5 to get the machine running.</strong> ~$30 once removes a variable from a system that has already cost days of brownout debugging. Build the better board afterwards, as a project rather than a blocker.</p>
+      <p>The cheap modules are still worth having — for console logic, lamps, and anything that is not the Pi.</p>
+    </div>
     <div class="callout note">
       <span class="ch">Sizing, settled</span>
       <p>9&nbsp;A AC-3 sounds small next to a 1.5&nbsp;kW drive, but <strong>a contactor downstream of a breaker never carries more than the breaker allows</strong> — the circuit protection sizes it, not the nameplate. On a 15&nbsp;A circuit, the MC-9b's ~25&nbsp;A AC-1 rating has 60&nbsp;% headroom. The spindle is air-cooled and small endmills in aluminium draw a few hundred watts, so the drive is simply oversized.</p>
