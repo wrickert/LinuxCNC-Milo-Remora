@@ -754,42 +754,44 @@ end-of-day isolation.
 lock it off and nobody can energise it while you are under it or away from it. In a space other
 people use, that is not a nicety, it is the point.
 
-### ✅ Sized from the nameplate (2026-09-09) — and `LC1D09BD` is TOO SMALL
+### ✅ Sizing, settled 2026-09-09 — size against the BREAKER, not the nameplate
 
 ```
-H100-1.5C2-1B
-POWER : 1.5KW
-INPUT : 1PH 110V 50/60HZ
-OUTPUT: 3PH 0-110V 14A 0-1000HZ
+H100-1.5C2-1B · POWER 1.5KW · INPUT 1PH 110V · OUTPUT 3PH 0-110V 14A 0-1000HZ
 ```
 
-🚨 **The 14 A is the OUTPUT current, not the input.** That is the trap. Input current on a
-single-phase 110 V drive is *higher* than output, because the same power comes in at a lower
-voltage through an uncorrected rectifier with a poor power factor:
+⚠️ **Two corrections in a row on this part; here is the reasoning that actually settles it.**
 
-> 1500 W ÷ (110 V × ~0.65 PF × ~0.95 η) ≈ **22 A** — call it **18–24 A** steady.
+First correction was right: the **14 A is OUTPUT current**, and input on a single-phase 110 V drive
+is *higher*, not lower — around 22 A at the drive's full 1.5 kW rating.
 
-**So my earlier `LC1D09BD` recommendation was wrong.** At 25 A AC-1 it would sit at 80–90 % of
-rating with nothing left for DC-bus inrush at power-on.
+Second correction — sizing the contactor at 40 A for that — was **over-corrected**, because it
+sized against a load that cannot occur:
 
-| Part | AC-1 rating | Verdict |
+> 🔑 **A contactor downstream of a breaker can never carry more than the breaker allows.** On a
+> 15 A circuit the sustained current is 15 A by definition, whatever the drive's plate says. **The
+> circuit protection is the sizing constraint, not the VFD nameplate.**
+
+And the load is nowhere near the plate anyway. The Milo's spindle is **air-cooled, not water-cooled**
+(the repo ships **65 mm** and 80 mm mount STLs; 65 mm is the air-cooled body size). Small endmills
+in aluminium at 24 000 rpm draw a few hundred watts, not 1500 — so real input current is single
+digits, and the drive being 1.5 kW just means it is comfortably oversized.
+
+| Circuit | Contactor | Verdict |
 |---|---|---|
-| `LC1D09BD` | 25 A | ❌ too tight — withdrawn |
-| `LC1D18BD` | 32 A | ✅ minimum |
-| **`LC1D25BD`** | **40 A** | ✅ **buy this** — the price difference is small and the margin is real |
+| **15 A** (present) | **`LC1D09BD`** — 25 A AC-1 | ✅ **correct** — 60 %+ headroom over the breaker |
+| 20 A | `LC1D09BD` | ✅ still fine |
+| 30 A, spindle worked hard | `LC1D18BD` — 32 A AC-1 | step up |
 
-Still with a `LADN11` aux block, still a 24 VDC coil.
+**So: `LC1D09BD` + `LADN11`, 24 VDC coil.** The 40 A recommendation is withdrawn.
 
-### 🚨 This also sizes the circuit, which matters for the Church workshop
-18–24 A at 110 V **will not run on a standard 15 A outlet.** It needs a **20 A circuit as an
-absolute minimum, realistically a dedicated 30 A**. Worth settling before the workshop's electrical
-is finalised, alongside whatever the compressor needs.
+Inrush is a separate and brief matter — AC-1 ratings tolerate it and the drive almost certainly has
+a precharge resistor.
 
-### ❓ One thing to confirm: is the spindle a 110 V spindle?
-The drive outputs **0–110 V**. Many Chinese water-cooled spindles are **220 V**. Running a 220 V
-spindle from a 110 V drive halves the V/f ratio — it makes rated torque only to about half its base
-frequency and then runs in field weakening, so it feels gutless at speed. If the spindle and drive
-came as a matched kit this is a non-issue; check the spindle's own plate to be sure.
+⚠️ Note this also retires the "needs a dedicated 30 A circuit" claim: **it runs fine on 15 A**,
+because the cutting load is a fraction of the drive's rating. Worth still specifying a 20 A circuit
+at the Church if the wiring is being done anyway — headroom is cheap at install time — but it is
+not a blocker.
 
 ### 🏅 The properly-engineered version, for reference
 A **safety relay** (Pilz PNOZ, Schneider XPS, Omron G9S) sits between the e-stop and the contactor
