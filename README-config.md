@@ -690,6 +690,81 @@ genuinely useful — it is what makes the spindle brake instead of coast — but
 substitute for breaking power. **The contactor remains the actual safety function**, exactly as in
 Chain 1 above. Use both: function 13 for the fast controlled stop, the contactor as the backstop.
 
+## ⚡ Choosing the contactor — and why it cannot be 24 V only
+
+### 🚨 The contactor MUST break the VFD's mains. Here is why.
+
+The proposal to switch only the 24 V bus fails on one point: **the spindle does not run on 24 V.**
+It runs on the VFD, which runs on mains. Break only the 24 V rail and the steppers stop while the
+**spindle keeps turning** — which is the opposite of what an e-stop is for.
+
+That would only be acceptable if the VFD had a **safety-rated STO** to fall back on. The H100 does
+not (see the H100 section above — function 13 is a *functional* stop dependent on firmware). So the
+contactor breaking mains is the actual safety function, and there is no way around it.
+
+**But the instinct is half right, and the design already does the other half.** The contactor
+switches **both**: the VFD's mains *and* the Octopus's VM stepper rail. What stays live is the
+Octopus's **logic and endstops** — deliberately, because that is what preserves machine position
+and switch states across an e-stop. So it is already a mixed-voltage contactor, not an
+all-or-nothing mains cut.
+
+### What to buy
+
+| Requirement | Why |
+|---|---|
+| **24 VDC coil** | the e-stop chain runs at 24 V — safe to run to a pendant, and no mains down a tether |
+| **~20–25 A AC-1** | a VFD input is a rectifier/capacitive load, so **AC-1**, not AC-3. Size on the VFD's input current with headroom for **DC-bus inrush** at power-on |
+| **3–4 poles** | VFD line + neutral, plus the 24 V VM rail |
+| **Auxiliary NO contact** | feeds `remora.input.04` so LinuxCNC knows the machine is live — built in, or a clip-on block |
+
+Concrete example: **Schneider TeSys `LC1D09BD`** (9 A AC-3 / **25 A AC-1**, `BD` = 24 VDC coil)
+plus a **`LADN11`** aux block (1 NO + 1 NC). Eaton DILM, ABB AF and Siemens 3RT equivalents are all
+fine. Confirm the coil-voltage suffix before ordering — it is the easiest thing to get wrong.
+
+⚠️ **Check the DC rating for the 24 V poles.** DC arcs do not self-extinguish at a zero crossing,
+so an AC contactor's DC rating is much lower and is published separately (**DC-1** / **DC-13**).
+At 24 V and a few amps this is normally fine, but look rather than assume.
+
+### 🔁 The seal-in circuit is what makes it behave
+
+```
+24V+ ──[E-stop NC]──[other NC contacts]──┬──[START NO]──┬── K1 coil ── 24V−
+                                          │             │
+                                          └──[K1 aux NO]┘
+```
+
+The K1 aux in parallel with START holds the coil in after you let go. Break the chain anywhere and
+it drops **and stays dropped** until START is pressed again. That is what gives you "power does not
+come back on its own" in hardware — the same property discussed for the software reset, but this
+one does not depend on any firmware.
+
+📌 Additional e-stop stations (a pendant) go in series in the NC run. That is the whole reason for
+moving to a contactor.
+
+### 🚫 Do NOT use a second contactor as the master off switch
+
+A contactor is a **momentary-logic** device: it needs its coil held energised, so a "master"
+contactor drops on any mains blip and needs someone to press START again. That is wrong for
+end-of-day isolation.
+
+**Use a lockable rotary disconnect switch** (or a plug you physically pull). Cheaper, simpler, and
+— the part that matters here — **lockable**.
+
+🔑 **The workshop is shared.** A lockable disconnect is how the machine is made safe to *leave*:
+lock it off and nobody can energise it while you are under it or away from it. In a space other
+people use, that is not a nicety, it is the point.
+
+### ❓ Still needed to size it
+**The VFD's input current / the spindle's power rating.** 110 V single-phase: a 1.5 kW spindle
+pulls roughly 14 A, which `LC1D09BD` covers comfortably at 25 A AC-1. A larger spindle moves the
+answer. Read the VFD nameplate before ordering.
+
+### 🏅 The properly-engineered version, for reference
+A **safety relay** (Pilz PNOZ, Schneider XPS, Omron G9S) sits between the e-stop and the contactor
+and adds dual-channel monitoring — it detects a welded contact or a shorted wire, and enforces a
+monitored reset. That is how a commercial machine does it. For a hobby mill a plain contactor with
+the seal-in above is the normal pragmatic choice; the safety relay is worth knowing exists.
+
 ## 💧 Mist coolant + air blast (config written 2026-09-08, hardware not fitted)
 
 G-code drives these directly: **M7 = mist, M8 = air blast, M9 = both off.** There is no flood
