@@ -843,6 +843,37 @@ to prevent.
 - 📌 **Keep one known-good USB-C supply on the shelf as a diagnostic**, so "is it the DC-DC?" is a
   two-minute question rather than a theory.
 
+### If you build the 24 V → 5.1 V converter: candidate chips
+
+Verified against manufacturer data 2026-09-09. ⚠️ **`TPS54J060` is NOT a candidate** — I would have
+suggested it from memory and it is **2.7–16 V in**, nowhere near a 24 V rail. Checked, discarded.
+
+| Part | Vin | Iout | Notes |
+|---|---|---|---|
+| **TI `LM61460`** | 3–36 V, **42 V transient** | **6 A** | 200 kHz–2.2 MHz, integrated FETs (41 mΩ HS / 21 mΩ LS), **HotRod VQFN-HR 4×3.5 mm** designed for low EMI. ✅ **the pragmatic pick** |
+| **ADI `LT8640S`** | **42 V** | **6 A** | Silent Switcher 2 — best-in-class EMI, which matters with a 1.5 kW VFD in the panel. Dearer, fussier package. |
+| Diodes `AP64500` | 3.8–40 V | **5 A** | Good part, wrong size — 5 A out for a 5 A load is exactly the "at its limit" objection raised against the cheap module. |
+| `LT8645S` | ~65 V, ~8 A | | ⚠️ **unverified** — worth checking if you want real 60 V margin. |
+
+**36 V on a 24 V rail is 1.5× margin**, which is tight-ish but standard industrial practice — and it
+matters less here because every inductive load in the panel (contactor coil, coolant solenoids)
+already gets a flyback diode, so the rail should never see a big spike.
+
+#### 🔑 The design details that actually decide whether it beats the cheap module
+
+1. **Fixed output, 1 % resistors. No pot.** This is the whole point — see the trimpot argument above.
+2. **🚨 Run it at 400–600 kHz, not 2 MHz.** 24 V → 5.1 V is ~21 % duty, so at 2 MHz the on-time is
+   only ~105 ns — uncomfortably close to many parts' minimum on-time. Low duty ratio is exactly
+   where cheap modules misbehave, and picking a sane frequency is most of the fix.
+3. **Generous output capacitance.** Ceramic plus a bulk polymer cap. Transient response *is* the
+   requirement; the Pi trips at ~4.63 V on a microsecond-scale load step.
+4. **Thermals:** 5 A × 5.1 V = 25.5 W out, so ~2.2 W dissipated at ~92 % efficiency. Wants real
+   copper pour, not a token pad.
+5. **Fuse the 24 V input**, since the GPIO feed bypasses the Pi's own protection.
+
+📌 **TI's WEBENCH will design the whole thing** around the LM61460 — inductor, capacitors, and a
+suggested layout. That is a large shortcut on the part of this job that is easy to get subtly wrong.
+
 ## 🎛 Control panel / pendant — how they work, and what to build
 
 ### Two separate things: the fixed CONSOLE and the handheld PENDANT
