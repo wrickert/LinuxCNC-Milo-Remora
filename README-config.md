@@ -869,6 +869,58 @@ fixed station. (22 mm potentiometers exist, but Remora has no analog input — s
 
 ---
 
+### 🔌 Serial bus to the console instead of a loom — yes, but read the failure mode
+
+**First, the reframe: a bus does not remove the cable, it shrinks it.** The e-stop **must** be
+hardwired copper in the contactor coil chain — that is not negotiable and not bus-able. So there is
+a cable to the console either way. The real choice is:
+
+| | Conductors |
+|---|---|
+| Parallel loom | ~14 (buttons, encoders, lamps, commons) |
+| **Bus** | **2 e-stop + 2 data + 2 × 24 V = 6, in one shielded cable** |
+
+Six conductors in one jacket. That is the win, and it is a real one.
+
+### The genuine downsides of USB, in order of how much they matter here
+
+1. **🚨 EMI, and this is the real one.** USB is single-ended. A 1.5 kW VFD a foot away is exactly
+   the environment where USB devices drop out — it is a well-known complaint with USB pendants on
+   CNC machines. **RS-485 is differential** and shrugs it off. This is the same argument already
+   made about the SPI ribbon, and it applies harder to a cable running across a bench.
+2. **🚨 Silent freeze on disconnect.** If the device unplugs or the driver hiccups, `hal_input`
+   **stops updating and the pins hold their last value** — they do not fail to a safe state, and
+   nothing tells you. A frozen override or jog input is the bad case.
+   **Mitigation: a heartbeat.** Have the console toggle a bit continuously and watch it with a
+   `watchdog`-style check; if it stops, force overrides to a known value and inhibit jog. Do not
+   ship a USB console without this.
+3. **Not realtime.** `hal_input` runs in userspace, so pins update at userspace speed with jitter.
+   For buttons and override knobs this is genuinely fine — they are operator inputs, not a servo
+   loop. Do not let this one worry you.
+4. **Ground loop.** USB carries ground between the Pi and the console. If the console also touches
+   the machine frame you have a loop. Isolated USB, or RS-485 with isolation, avoids it.
+
+### The industrial answer, if you want it
+**One shielded multicore carrying the e-stop pair, an RS-485 pair, and 24 V for the lamps.** Since
+you are pulling a cable for the e-stop anyway, the extra two conductors are free. Differential,
+isolated, immune to the VFD, and it scales to a pendant on the same bus later.
+
+⚠️ **Cost: LinuxCNC has no first-class generic Modbus-IO component.** The VFD-specific ones
+(`hy_vfd`, `gs2_vfd`) exist, but for arbitrary console IO you would write a userspace HAL component
+yourself. Straightforward in Python — but it is work USB does not require.
+
+### Recommendation
+**Start with USB-CDC and a heartbeat watchdog.** One cable, `hal_input` or a small Python userspace
+component, working this week. **If it drops out near the spindle, move to RS-485** — the console
+firmware barely changes, and you will have already pulled a cable that can carry it if you specify
+6-core shielded from the start.
+
+🔑 **Pull the right cable now even if you start on USB.** A 6-core shielded run costs almost nothing
+today and saves re-pulling it later.
+
+🚨 **And unchanged either way: the e-stop is never on the bus.** Not USB, not RS-485. Copper, in
+series, into the contactor coil.
+
 ## 🎚 The pendant — and the wchSmartKnob is a genuinely good fit
 
 A motorised haptic knob is an unusually good CNC pendant, because the thing that makes a pendant
