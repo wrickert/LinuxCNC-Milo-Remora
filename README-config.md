@@ -925,36 +925,41 @@ ambiguously, and it is the one field worth confirming rather than assuming.
 
 The console just toggles a bit every loop. From a Python userspace component that is one line.
 
-### 🔑 What to actually do with `console-ok` — less than you would think
+### 🔑 What to do with `console-ok` — on THIS console, almost nothing
 
-The instinct is to e-stop on console loss. **Don't** — that is the over-eager e-stop hazard from
-the safety-chain section. Losing the console mid-program is a *degraded* state, not an emergency:
-the program is running fine, the physical e-stop still works, and the keyboard still works.
+⚠️ **Corrected 2026-09-09.** An earlier version of this section said to gate jog on `console-ok`.
+That was carried over from the *pendant* discussion. **The fixed console has no jog controls** —
+it has e-stop (copper), cycle start, feed hold, stop, machine-on, and three override encoders.
 
-Work through what actually freezes:
+Rework the question for what is actually on it:
 
 | Input | Frozen behaviour | Dangerous? |
 |---|---|---|
-| Buttons | stop responding | ❌ no — annoying only |
-| Feed / spindle override | **holds its last value** | ❌ no — a stuck override is benign |
-| **Jog** | **may hold a motion command** | 🚨 **yes — this is the one** |
+| Feed / spindle / rapid override | holds its last value | ❌ benign |
+| Feed hold, stop, machine-on | stop responding | ❌ annoying only |
+| **Cycle start** | frozen **true** could re-trigger a run | ⚠️ only if the freeze coincides with a press, and only if `halui.program.run` is level- rather than edge-triggered |
 
-So: **gate jog on `console-ok`, and leave everything else alone.**
+**So nothing on this console is dangerous when frozen**, and there is nothing that needs
+interlocking. If you want the watchdog to gate one thing, gate the **momentary command buttons** —
+a stuck-true Run is the single frozen state with a plausible bad outcome, and it costs one `and2`.
+The overrides and lamps need nothing.
 
-```
-loadrt and2 count=1
-net console-ok               => and2.0.in0
-net jog-request  <console>   => and2.0.in1
-net jog-enabled  and2.0.out  => halui.jog.0.plus
-```
+### So keep the watchdog — but as an annunciator, not an interlock
 
-📌 And drive the overrides with **`halui.feed-override.increase` / `.decrease`** rather than
-`.counts`/`.value`. A dead console then simply stops changing the override instead of needing a
-forced fallback — the simpler design is also the safer one here.
+The real hazard of a dead console is not the machine doing something. It is **you reaching for feed
+hold in a hurry and nothing happening**, without knowing why. Believing you have a control you do
+not have is the failure mode.
 
-🚨 **Raise the alert somewhere that is not the console.** The machine-on lamp lives *on* the console,
-so if the console is dead you cannot see its lamp. Put the console-lost indication in the GUI too,
-or you have a silent failure with a status light that cannot report it.
+That is fixed by **knowing immediately**, not by gating anything:
+
+- `watchdog.ok-out` → a visible warning **in the GUI**
+- 🚨 not on the console — its lamp cannot report its own death
+
+The fallbacks are already there and are worth trusting: keyboard F1 and the GUI's own buttons, plus
+the physical e-stop, which is copper and unaffected by anything on the USB link.
+
+📌 **Net effect: the console gets simpler.** Heartbeat in, warning out, and no interlock logic at
+all. That is the right amount of machinery for a device whose failure mode is inconvenience.
 
 ### The industrial answer, if you want it
 **One shielded multicore carrying the e-stop pair, an RS-485 pair, and 24 V for the lamps.** Since
