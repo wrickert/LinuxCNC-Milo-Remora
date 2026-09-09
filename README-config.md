@@ -961,6 +961,61 @@ the physical e-stop, which is copper and unaffected by anything on the USB link.
 📌 **Net effect: the console gets simpler.** Heartbeat in, warning out, and no interlock logic at
 all. That is the right amount of machinery for a device whose failure mode is inconvenience.
 
+### ✅ DECIDED 2026-09-09: RS-485 over Cat5e, CH32L103 console
+
+The thing that made USB unattractive is real: **USB-C carries data and 5 V, but the console also
+needs 24 V for the lamps and a hardwired e-stop pair.** So USB means one cable plus three more
+conductors — two cables, or an ugly hybrid. That is the whole objection, and Ethernet cable
+dissolves it: **one standard connector, one standard cable, everything inside.**
+
+#### Pair assignment (Cat5e / Cat6, shielded)
+
+| Pair | Use |
+|---|---|
+| 1 — blue | **RS-485 A / B** — must be a genuine twisted pair |
+| 2 — orange | **24 V / 0 V** for lamps and console logic |
+| 3 — green | **E-stop channel 1** (NC, in series with the contactor coil) |
+| 4 — brown | 🔑 **E-stop channel 2** — wire it now even if unused |
+
+**Wire the spare pair as a second e-stop channel from day one.** Dual-channel is what a safety
+relay wants, and re-pulling cable is the expensive part. Same argument as specifying 6-core: the
+foresight is free today and costly later.
+
+✅ **Everything in the jacket is 24 V or below.** No mains, so no segregation or insulation-rating
+problem mixing the safety loop with the signal pair.
+
+✅ **Current is trivial** — the e-stop pair carries only the **contactor coil** current, not load
+current. A 24 VDC LC1D coil is ~5–6 W, so ~0.25 A. 24 AWG is completely comfortable.
+
+⚠️ **Put the flyback diode at the contactor coil.** The coil is inductive and its collapse spike
+would otherwise share a jacket with the RS-485 pair. Suppressed at the source, the cable never
+sees it. (Same rule already applied to the coolant solenoids.)
+
+#### 🚨 The one real hazard: it looks like Ethernet
+RJ45 for RS-485 is established practice — plenty of VFDs use it for Modbus — but the failure is
+ugly:
+- Console plugged into a **network switch** → 24 V into a switch port
+- A **PoE** switch plugged into the console → 48 V into 24 V logic
+
+Mitigate: **label it loudly, use a distinctly coloured boot, and fuse the 24 V pair at the console.**
+It is also worth *not* putting the data pair on Ethernet's normal 1/2 and 3/6 positions, so a real
+Ethernet device sees nothing coherent.
+
+#### Board notes
+- **CH32L103** — good pick. Same part as [[pocketpd]], so the toolchain and experience carry over.
+  UART for RS-485, USB device for the fallback, and enough GPIO for ~8 buttons + 3 encoders (6 pins)
+  + ~5 lamps.
+- **Fit the RS-485 transceiver, don't just footprint it.** SP3485 / MAX3485 / THVD1450 is under a
+  dollar. Populating both it and the USB-C connector means the choice is firmware, not rework — and
+  USB stays available as a bench-debug path forever.
+- Footprint the **120 Ω termination** and **fail-safe bias** resistors with jumpers. Two nodes over
+  a few metres often works without them; having the pads costs nothing.
+- Use **shielded** cable and ground the shield at **one end only** — there is a 1.5 kW VFD in the
+  same room.
+
+📌 When this becomes a PCB it wants its own repo, matching the pattern of [[pocketpd]] /
+`pd-bench-supply` / [[wchsmartknob]], with symbols and footprints going to [[ue-footprints]].
+
 ### The industrial answer, if you want it
 **One shielded multicore carrying the e-stop pair, an RS-485 pair, and 24 V for the lamps.** Since
 you are pulling a cable for the e-stop anyway, the extra two conductors are free. Differential,
