@@ -242,12 +242,12 @@
 
   <section>
     <h2>Two power domains, joined only by ground</h2>
-    <p>The single decision that shapes everything else: the Pi runs on its own supply, off unswitched mains. The e&#8209;stop drops the machine and leaves the computer alive.</p>
+    <p>The single decision that shapes everything else: <strong>one 24&nbsp;V supply, permanently powered, upstream of the contactor.</strong> Everything that must survive an e&#8209;stop hangs off it — the Pi through a DC-DC, the console, and the Octopus's logic. The e&#8209;stop drops the motors and the spindle and leaves the computer alive.</p>
     <p>The Octopus is the interesting case, because it belongs to <em>both</em> domains. Its logic and endstops sit on the unswitched 24&nbsp;V rail and stay live; only its <span class="mono">VM</span> stepper rail is switched. That is deliberate — see the e&#8209;stop chain section for why dropping the board's logic is the wrong move on this machine.</p>
 
     <figure>
       <div class="figscroll">
-        <svg viewBox="0 0 900 440" role="img" aria-label="Power architecture: mains feeds an unswitched branch and a switched branch. Unswitched powers a 5 volt USB-C PD supply feeding the Raspberry Pi 5, and a 24 volt PSU that feeds the Octopus logic and endstops. The switched branch runs through a 24 volt coil contactor, which supplies the VFD and spindle with mains and the Octopus stepper VM rail with 24 volts. The Octopus straddles both domains: its logic stays live on e-stop while its motor rail drops. The Pi and Octopus are joined only by SPI and ground, with no 5 volt link.">
+        <svg viewBox="0 0 900 440" role="img" aria-label="Power architecture: mains feeds a permanently powered 24 volt PSU and, through the e-stop contactor, the VFD. The 24 volt PSU feeds a DC-DC converter that powers the Raspberry Pi, the operator console over Cat5e, the Octopus logic and endstops, and the contactor coil via the e-stop chain. Everything on that side stays powered. The contactor switches the VFD mains and the Octopus VM stepper rail, which drop on e-stop. The console reaches the Pi over RS-485 and puts its e-stop contacts in the coil chain, not on the data link.">
           <defs>
             <marker id="a-mains" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-mains" d="M0,0 L10,5 L0,10 z"/></marker>
             <marker id="a-24" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-24" d="M0,0 L10,5 L0,10 z"/></marker>
@@ -264,9 +264,9 @@
           <text class="t" x="89" y="210" text-anchor="middle">Mains AC</text>
           <text class="ts" x="89" y="228" text-anchor="middle">house circuit</text>
 
-          <rect class="bx" x="230" y="40" width="170" height="60" rx="3"/>
-          <text class="t" x="315" y="66" text-anchor="middle">USB-C PD supply</text>
-          <text class="ts" x="315" y="84" text-anchor="middle">5 V · 5 A</text>
+          <rect class="bx" x="450" y="40" width="160" height="60" rx="3"/>
+          <text class="t" x="530" y="66" text-anchor="middle">DC-DC 24→5 V</text>
+          <text class="ts" x="530" y="84" text-anchor="middle">5.1 V · 6 A</text>
 
           <rect class="bx" x="660" y="40" width="200" height="60" rx="3"/>
           <text class="t" x="760" y="66" text-anchor="middle">Raspberry Pi 5</text>
@@ -296,8 +296,8 @@
           <text class="t" x="760" y="376" text-anchor="middle">Spindle</text>
           <text class="ts" x="760" y="394" text-anchor="middle">24 000 rpm max</text>
 
-          <path class="wire w-mains" d="M89,180 L89,70 L222,70" marker-end="url(#a-mains)"/>
-          <text class="tw tw-mains" x="97" y="128">unswitched</text>
+          <path class="wire w-24" d="M315,132 L315,70 L442,70" marker-end="url(#a-24)"/>
+          <text class="tw tw-24" x="323" y="106">24 V — always on</text>
           <path class="wire w-mains" d="M154,200 L188,200 L188,162 L222,162" marker-end="url(#a-mains)"/>
           <path class="wire w-mains" d="M154,228 L188,228 L188,306 L222,306" marker-end="url(#a-mains)"/>
           <text class="tw tw-mains" x="182" y="268" text-anchor="end">switched</text>
@@ -306,7 +306,19 @@
           <text class="tw tw-24" x="470" y="144" text-anchor="middle">24 V logic — always on</text>
 
           <path class="wire w-24" d="M315,192 L315,290" marker-end="url(#a-24)"/>
-          <text class="tw tw-24" x="325" y="224">24 V</text>
+          <text class="tw tw-24" x="325" y="224">24 V coil</text>
+          <text class="tw tw-24" x="325" y="240">via E-stop chain</text>
+
+          <rect class="bx" x="440" y="132" width="160" height="60" rx="3"/>
+          <text class="t" x="520" y="158" text-anchor="middle">Operator console</text>
+          <text class="ts" x="520" y="176" text-anchor="middle">CH32L103 · Cat5e</text>
+
+          <path class="wire w-24" d="M400,178 L420,178 L420,162 L432,162" marker-end="url(#a-24)"/>
+          <path class="wire w-sig" d="M600,146 L628,146 L628,86 L652,86" marker-end="url(#a-sig)"/>
+          <text class="tw tw-sig" x="604" y="138">RS-485</text>
+          <path class="wire w-mains" d="M470,192 L470,250 L324,250" marker-end="url(#a-mains)"/>
+          <circle cx="315" cy="250" r="3" fill="currentColor"/>
+          <text class="tw tw-mains" x="404" y="264" text-anchor="middle">E-stop pair</text>
 
           <path class="wire w-24" d="M400,306 L652,306" marker-end="url(#a-24)"/>
           <text class="tw tw-24" x="526" y="298" text-anchor="middle">24 V VM — switched</text>
@@ -316,15 +328,15 @@
           <path class="wire w-mains" d="M610,380 L652,380" marker-end="url(#a-mains)"/>
           <text class="tw tw-mains" x="631" y="370" text-anchor="middle">3-phase</text>
 
-          <path class="wire w-5" d="M400,70 L652,70" marker-end="url(#a-5)"/>
-          <text class="tw tw-5" x="526" y="62" text-anchor="middle">5 V · 5 A</text>
+          <path class="wire w-5" d="M610,70 L652,70" marker-end="url(#a-5)"/>
+          <text class="tw tw-5" x="631" y="62" text-anchor="middle">5.1 V</text>
 
           <path class="wire w-sig" d="M690,100 L690,196" marker-end="url(#a-sig)" stroke-dasharray="6 4"/>
           <text class="tw tw-sig" x="702" y="132">SPI + GND only</text>
           <text class="tw tw-sig" x="702" y="150">no 5 V between them</text>
         </svg>
       </div>
-      <figcaption>The contactor is the only thing that switches power; every e&#8209;stop button merely opens its 24&nbsp;V coil circuit. That is what lets a second station — a pendant — exist at all, because the button no longer has to break mains itself. The Pi and the Octopus's logic are upstream of the break, so LinuxCNC stays running, keeps its position, and can report <em>why</em> it stopped.</figcaption>
+      <figcaption>The 24&nbsp;V PSU sits upstream of the contactor and never switches, so a DC-DC off it keeps the Pi, the console and the Octopus's logic alive through an e&#8209;stop — the machine loses its motors and its spindle, not its memory of where it is. The console's e&#8209;stop contacts join the coil chain in copper; only its buttons and encoders ride the RS-485 pair.</figcaption>
     </figure>
 
     <p>The Octopus <em>can</em> power a Pi — it has a dedicated header (J26) and an 8&nbsp;A 5&nbsp;V buck, so this isn't a capacity problem. It's a behaviour problem. Hang the Pi off that rail and every e&#8209;stop, every power-down and every fault kills the computer mid-cut: lost machine position, no controlled recovery, and an unclean NVMe shutdown every single time.</p>
@@ -333,7 +345,7 @@
       <span class="ch">Wiring consequence</span>
       <p>With two supplies, connect <strong>ground and the SPI signals only</strong>. Do not bridge 5&nbsp;V between the Pi and the Octopus — two supplies fighting over one rail is how you cook a regulator. Bond the grounds properly; SPI needs a solid reference, not an incidental one.</p>
     </div>
-    <p>Secondary, but real: a Pi&nbsp;5 can't negotiate USB&#8209;PD through the GPIO header, so it boots into reduced-power mode and caps total USB current at 600&nbsp;mA — awkward when the NVMe HAT is already drawing its own 2–5&nbsp;W.</p>
+    <p>Why a DC-DC rather than a second USB-C brick: <strong>5&nbsp;V/5&nbsp;A is not a standard USB-PD profile.</strong> The standard fixed offers are 5/9/15/20&nbsp;V at 3&nbsp;A, so most chargers — even 100&nbsp;W ones — give only 5&nbsp;V/3&nbsp;A and deliver their headline wattage at voltages the Pi cannot use. On 3&nbsp;A it caps total USB current at 600&nbsp;mA — awkward when the NVMe HAT is already drawing its own 2–5&nbsp;W.</p>
   </section>
 
   <section>
@@ -541,6 +553,28 @@
   </section>
 
   <section>
+    <h2>Parts and sources</h2>
+    <p>Prices checked on live listings, 9 September 2026. Verify before ordering — they move.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Part</th><th>Spec</th><th>Price</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Mean Well DDR-30G-5</strong><br><span class="ts">DIN-rail DC-DC</span></td><td class="m">24 V → 5 V, 6 A, 30 W</td><td class="m">$28.49 – $49.48</td></tr>
+          <tr><td><strong>BAOMAIN MC-9b</strong><br><span class="ts">contactor, UL listed</span></td><td class="m">3-pole, 24 VDC coil<br>9 A AC-3 ≈ 25 A AC-1</td><td class="m">$34.99</td></tr>
+          <tr><td>Heschen CT1-25<br><span class="ts">budget alternative</span></td><td class="m">2-pole modular, 24 VDC coil, 25 A</td><td class="m">$14.99</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <span class="ch">Two things to check before ordering the contactor</span>
+      <p><strong>It needs a normally-open auxiliary contact</strong> for the LinuxCNC feedback into <span class="mono">remora.input.04</span>. The MC-9b listing does not mention one — either find a variant with an integrated aux or budget for a clip-on block.</p>
+      <p><strong>Three poles is the right count</strong>: VFD line, VFD neutral, and the 24&nbsp;V VM rail. The Heschen is two-pole, so it is cheaper but you would need two of them, and modular lighting contactors usually have no aux contact at all. The UL listing on the MC-9b is worth the difference in a shared workshop.</p>
+    </div>
+    <div class="callout note">
+      <span class="ch">Sizing, settled</span>
+      <p>9&nbsp;A AC-3 sounds small next to a 1.5&nbsp;kW drive, but <strong>a contactor downstream of a breaker never carries more than the breaker allows</strong> — the circuit protection sizes it, not the nameplate. On a 15&nbsp;A circuit, the MC-9b's ~25&nbsp;A AC-1 rating has 60&nbsp;% headroom. The spindle is air-cooled and small endmills in aluminium draw a few hundred watts, so the drive is simply oversized.</p>
+    </div>
+
     <h2>Before you cut a wire</h2>
     <p>Nine items. Four are settled, five are not &#8212; and the split matters, because everything still open needs the physical board in front of you.</p>
     <div class="open">
