@@ -57,3 +57,16 @@ net spindle-rpm-fb   scale.1.out                => near.0.in2
 net spindle-rpm-cmd  => near.0.in1
 setp near.0.difference 200.0
 net spindle-at-speed near.0.out => spindle.0.at-speed
+
+##############################################################################
+# OUTPUT CURRENT  ->  spindle-current-raw  (watch only, drives nothing)
+#
+# 0222H, read in the same transaction as the speed feedback. Pick the
+# spindle-current-raw signal in halscope to see spindle load during a cut.
+# Raw register units: probably 0.1 A, NOT yet confirmed on the drive. The
+# idle reading at a given RPM is the zero; cutting load is the rise above it.
+#
+# Deliberately NOT wired to motion.adaptive-feed. Log real cuts first and
+# decide whether the signal is clean enough to act on.
+##############################################################################
+net spindle-current-raw mb2hal.spindle-fb.02.float

@@ -287,3 +287,36 @@ Verified by that single run:
    attempt. Check its mtime against the clock, or `: > ~/linuxcnc_debug.txt` before testing.
 3. **`deploy.sh` catches hand-edits on the Pi.** A `sed` made there during testing survived until
    the next deploy overwrote it — which is the point of the repo being the source of truth.
+
+## Output current for spindle load (2026-10-19, NOT yet verified on hardware)
+
+The manual's holding-register table maps `0220H`–`022DH` onto its monitor list, in this order
+(manual p. 83–84, input-register table):
+
+| Register | Monitor item |
+|---|---|
+| `0220H` | output frequency (already used for `at-speed`) |
+| `0221H` | set frequency |
+| `0222H` | **output current** |
+| `0223H` | output speed |
+| `0224H` | DC bus voltage |
+| `0225H` | AC (output) voltage |
+| `0226H` | temperature |
+| `022CH` | output power |
+
+`TRANSACTION_02` now reads **three** registers from `0220H` instead of one, so current arrives in
+the same transaction as the speed feedback (still under the 4-register limit). `spindle.hal` nets
+`mb2hal.spindle-fb.02.float` to the signal **`spindle-current-raw`** for halscope. It drives
+nothing; adaptive feed is deliberately not wired yet.
+
+**To verify the next time the Pi is on** (it was powered off when this was written):
+1. With LinuxCNC stopped, read all three with mbpoll, the same way `0220H` was read above but
+   with `-c 3`. A Modbus exception here means the drive refuses the longer read.
+2. Start LinuxCNC, `M3 S12000`, and check `at-speed` still goes TRUE. If the 3-register read
+   failed, `spindle-fb.00` stays 0, so `at-speed` stays FALSE and a program **waits at M3**
+   rather than plunging. Revert to `NELEMENTS=1` in that case.
+3. Cycle the keypad display to output current (the `A` light on) and compare it with
+   `spindle-current-raw`. The keypad shows one decimal (manual: "Output current is 3.0A"),
+   so expect raw = A × 10, but confirm before using a scale.
+4. Note the idle current at the RPMs you actually cut at. That idle value is the zero; cutting
+   load is the rise above it.
