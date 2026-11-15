@@ -708,6 +708,36 @@ Octopus's **logic and endstops** — deliberately, because that is what preserve
 and switch states across an e-stop. So it is already a mixed-voltage contactor, not an
 all-or-nothing mains cut.
 
+### 🚨 Dropping VM resets the TMC2209s, and Remora does not reconfigure them (2026-11-15)
+
+(Claude, 2026-11-15, s:fdb2f2fa.) Read out of Remora's
+`Firmware/FirmwareSource/Remora-OS6/modules/tmc/tmc2209.cpp`: `createTMC2209()` builds the driver,
+calls `configure()` **once** (current, microsteps, spreadCycle, CoolStep), then deletes the module.
+Nothing writes the drivers again until the board reboots.
+
+A TMC2209's core runs off its own regulator from VM, so **when K1 drops VM the drivers reset to
+their power-on defaults** (Klipper reports exactly this as `GSTAT reset=1` after a motor-supply dip).
+Press Start, VM returns, and the drivers come back **without** the `config.txt` settings: current
+from the module's VREF pot instead of 1200/1200/900 mA, and stealthChop instead of spreadCycle.
+Microsteps fall back to the MS1/MS2 pins, which may or may not give 8. **The machine moves, just
+wrongly**, which is the worst kind of failure.
+
+This holds for one PSU with a switched branch **and** for a separate switched motor PSU. Either way
+VM drops while the logic stays up.
+
+So the "logic stays live preserves position" argument above is weaker than it reads. De-energised
+steppers lose holding torque anyway (Z can drift, a driver reset can snap each motor up to 2 full
+steps), so **position after a VM drop is not trustworthy regardless.**
+
+**Rule until something better exists: after any e-stop, run Reset Octopus
+([`octopus-reset.sh`](octopus-reset.sh)), then re-home.** Keeping the logic live still pays off: the
+Pi stays up, LinuxCNC knows it is in e-stop, and the endstops and the toolsetter keep reading.
+
+⚠️ **Not yet verified on the machine.** At first power-up after the rewire: e-stop, Start, *no*
+Octopus reset, then jog and listen (stealthChop is a near-silent hiss) and measure a 10 mm move. Then
+reset the board and compare. Whether to automate the reset gets decided with the HAL work; the 3 s
+boot objection in the WDRESET section still applies.
+
 ### What to buy
 
 | Requirement | Why |
