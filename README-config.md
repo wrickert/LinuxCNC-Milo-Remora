@@ -738,6 +738,39 @@ Octopus reset, then jog and listen (stealthChop is a near-silent hiss) and measu
 reset the board and compare. Whether to automate the reset gets decided with the HAL work; the 3 s
 boot objection in the WDRESET section still applies.
 
+#### 🚨 It happens at EVERY power-on, not just after an e-stop
+The latch means K1 is always **out** when the disconnect closes, because power must not come back on
+its own. So the Octopus always boots with VM off. `configure()` then prints `failed! Likely cause: no
+power` and writes into the void, and Start brings VM up on driver defaults. Without a fix, every
+session starts with mis-configured drivers.
+
+#### Proposed fix: sense VM, then reset the Octopus once VM is up (Claude, 2026-11-15, s:fdb2f2fa; not decided)
+1. **Sense VM on the load side of its fuse, into a free STOP input** (`PG_13`/`PG_14`/`PG_15` are
+   unused). Use a 24 V DIN interface relay (coil on VM, contact across GND + signal like an endstop)
+   or a PC817 opto (about 4.7 kΩ from VM). It catches K1 out, a blown VM fuse and a dead PSU, where the
+   K1 aux contact only sees the first. A broken wire reads "no VM", which is fail-safe. It can replace
+   the aux readback on `PG_12`, which takes the aux count back to 2 NO (self-hold + VFD), so `LADN11` is
+   enough again.
+2. **Chain 2 gets `vm-ok`**, so LinuxCNC cannot enable without motor power.
+3. **A "drivers stale" flip-flop in HAL**, set when LinuxCNC starts and whenever `vm-ok` falls. When
+   `vm-ok` is TRUE and the flag is set, pulse `remora.PRU-reset` once and clear the flag. The Octopus
+   reboots with VM on (about 3 s), configures the drivers, and then F1 brings the link back. This
+   works whether Start was pressed before or after LinuxCNC launched. The worst case is one unneeded
+   reset when LinuxCNC is relaunched with VM already up.
+
+⚠️ **Untested:** how `remora-spi` behaves when the board is reset under a running LinuxCNC, and
+whether the input pins hold their last value while the link is down (if they glitch FALSE, the
+flip-flop re-arms and resets again). Bench-test it before trusting it.
+
+**Rejected alternatives, for the record:**
+- *Put the whole Octopus on the switched side* so every Start is a fresh boot. It needs no logic, but
+  during every e-stop the Pi back-feeds the unpowered STM32 through CE0 and the debug UART TX, which
+  both idle high (the "weak power LED" problem above). That is acceptable only behind a buffer with
+  power-off isolation.
+- *Don't switch VM at all*, leaving the axes to stop through LinuxCNC. Remora drives the TMC EN pins
+  (`PF_14`/`PF_15`/`PG_5`), so the drivers' outputs do go off, but the stop then depends on firmware.
+  That gives up the copper Chain 1 for the axes.
+
 ### What to buy
 
 | Requirement | Why |
