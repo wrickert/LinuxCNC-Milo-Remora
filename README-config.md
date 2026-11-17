@@ -599,8 +599,13 @@ contactor drops out. No software involved, nothing to crash or hang.
 
 - E-stop mushroom (latching, NC)
 - Any additional e-stop station / pendant, in series — **this is what the contactor rework was for**
-- Guard or enclosure interlock, if the machine ever gets enclosed
 - Thermal / overload contacts
+
+⚠️ **The enclosure door is NOT in this chain** (corrected 2026-11-17; the 09-08 version listed a
+guard interlock here). A door you open on every job must pause the job, not drop the contactor:
+dropping VM resets the TMC2209s to defaults, which means Reset Octopus and re-home every time, and
+the program aborts. The door is a software interlock instead: see
+[Enclosure door interlock](#-enclosure-door-interlock-2026-11-17) below.
 
 🚨 **Nothing that is not an emergency stop belongs in this chain.** Power-good and spindle feedback
 are not emergency stops.
@@ -615,8 +620,8 @@ addf safety-chain servo-thread
 
 net link-ok       remora.SPI-status   => safety-chain.in-00
 net contactor-ok  remora.input.04.not => safety-chain.in-01
-net psu-ok        remora.input.05.not => safety-chain.in-02
-net vfd-ok        remora.input.06.not => safety-chain.in-03
+net psu-ok        remora.input.06.not => safety-chain.in-02
+net vfd-ok        remora.input.07.not => safety-chain.in-03
 net machine-ok    safety-chain.and    => iocontrol.0.emc-enable-in
 ```
 
@@ -637,6 +642,57 @@ not-really-emergencies trains you to ignore it, which is worse than not having i
 | VFD *fault* output | **Chain 2** — the spindle has failed |
 | **Spindle at-speed** | ❌ **NOT the e-stop chain.** This is `spindle.0.at-speed`, which gates *feeding*. Motion waits for it after M3 natively |
 | Coolant low / air pressure low | ❌ warning or program pause, not e-stop |
+| **Enclosure door** | ❌ **NOT e-stop.** `motion.feed-inhibit` + VFD run gate, see below |
+
+(`input.05` is now taken by the door, so the example above uses 06 and 07 for the
+hypothetical PSU and VFD contacts.)
+
+### 🚪 Enclosure door interlock (2026-11-17)
+The Milo now sits in a wood enclosure on a shelf, with the control box and VFD outside it. The
+door gets a **software** interlock, implemented in `milo.hal` (section DOOR INTERLOCK) and
+`octopus/config.txt`. It is deliberately not in either chain above.
+
+**Sensor:** a sealed magnetic reed door contact, the alarm-system kind that is **closed when the
+magnet is beside it** (meter it: magnet near = 0 Ω). Two wires, signal + GND, on **STOP_7 =
+`PG_15`** → `remora.input.05`, internal pull-up. Leave the header's power pin unconnected. Twisted
+pair, routed away from the spindle cable; HAL debounces it for 20 ms.
+Door shut pulls the input LOW. **Door open and a cut wire both read HIGH = "door open"** (fail-safe).
+
+This is the **NC loop**: closed in the safe state, so a cut wire, pulled plug or bad crimp stops the
+machine instead of hiding. ⚠️ **Buying trap, the labels disagree:** alarm door contacts are labelled
+by the door-shut state, so buy **"NC"** (closed with the magnet present). Bare reed switches are
+labelled with no magnet, so a bare **"NO" / Form A** reed is the *same* behaviour. An alarm contact
+sold as "NO" is backwards. Meter it before fitting. ⚠️ **NC catches opens, not shorts:** a crushed
+cable shorting signal to GND reads "door shut" forever. Dual-channel safety relays exist to catch
+that; for this interlock, keep the cable out of pinch points and repeat commissioning step 3 now and
+then.
+
+| Event | What happens |
+|---|---|
+| Door opens | Program/MDI motion stops on the next servo cycle (`motion.feed-inhibit`); the program **pauses**, it is not aborted. The VFD run bit drops, so the spindle ramps down on the VFD's decel ramp (seconds, not instant). Mist and air blast go off. |
+| Door shuts | Spindle restarts if it was on. Motion **holds until `spindle.0.at-speed`** is true again. `at-speed` compares commanded RPM with the VFD's reported frequency, so it is false the instant the spindle is stopped: no timer, no restart race. |
+| Door open, idle | Spindle won't start; programs, MDI and toolsetter probing wait. Jogging should still work (it is a separate path, `motion.jog-inhibit`). **Verify.** |
+
+Side effect of the `at-speed` term: rapids also wait while the spindle spins up after `M3` or an
+`S` change, and feed stops if the VFD folds back its output frequency under overload. Both are
+conservative.
+
+🚨 **Convenience interlock, not a safety-rated guard.** It works only while the Pi, Remora and the
+Modbus link are up. Don't reach in until the spindle has stopped. The e-stop is the safety device.
+
+#### 🚨 Commissioning — do these before trusting it
+1. **Copy `octopus/config.txt` to the Octopus's microSD, then reset it.** Check the boot banner
+   parses every module. ⚠️ If the HAL is deployed but the Octopus still has the OLD config, bit 5
+   is never sent, `remora.input.05` reads FALSE = "door shut" forever, and **the interlock silently
+   does nothing.** Step 3 catches it.
+2. **Until the switch is wired, `PG_15` floats HIGH = "door open":** the spindle won't start and no
+   program moves. That's the fail-safe working. To run without the switch, jumper STOP_7 signal to
+   GND.
+3. With motors unpowered, in halshow: watch `door-open` and `door-feed-hold`. Open the door → both
+   TRUE; shut it → both FALSE (spindle off). Unplug the switch → `door-open` TRUE.
+4. Spindle at low RPM, air-cutting: `M3 S6000`, open the door → spindle ramps down, motion stops;
+   shut it → spindle spins up and motion resumes only once `spindle.0.at-speed` is TRUE.
+5. Door open, idle: confirm jogging still works (or note that it doesn't).
 
 ### 🔎 Add a first-out indicator, or you will regret the AND
 
@@ -745,8 +801,8 @@ power` and writes into the void, and Start brings VM up on driver defaults. With
 session starts with mis-configured drivers.
 
 #### Proposed fix: sense VM, then reset the Octopus once VM is up (Claude, 2026-11-15, s:fdb2f2fa; not decided)
-1. **Sense VM on the load side of its fuse, into a free STOP input** (`PG_13`/`PG_14`/`PG_15` are
-   unused). Use a 24 V DIN interface relay (coil on VM, contact across GND + signal like an endstop)
+1. **Sense VM on the load side of its fuse, into a free STOP input** (`PG_13`/`PG_14` are
+   unused; `PG_15` became the door switch on 2026-11-17). Use a 24 V DIN interface relay (coil on VM, contact across GND + signal like an endstop)
    or a PC817 opto (about 4.7 kΩ from VM). It catches K1 out, a blown VM fuse and a dead PSU, where the
    K1 aux contact only sees the first. A broken wire reads "no VM", which is fail-safe. It can replace
    the aux readback on `PG_12`, which takes the aux count back to 2 NO (self-hold + VFD), so `LADN11` is
@@ -1264,8 +1320,8 @@ one button. This is where a custom panel beats any commercial pendant, because t
 *your* jobs rather than generic ones.
 
 ### Pin budget
-DIAG0–7 gives eight inputs; five are already spoken for (3 endstops, toolsetter, contactor aux),
-leaving `PG_13`/`PG_14`/`PG_15`. A useful panel wants ~12 inputs, so plan to use other free Octopus
+DIAG0–7 gives eight inputs; six are already spoken for (3 endstops, toolsetter, contactor aux,
+door switch on `PG_15`), leaving `PG_13`/`PG_14`. A useful panel wants ~12 inputs, so plan to use other free Octopus
 headers — the unused MOTOR sockets' step/dir/enable pins are all just GPIO. **Or** split it: buttons
 on a USB numpad via `hal_input`, encoders wired to Remora. That combination costs almost nothing and
 sidesteps the pin budget entirely.

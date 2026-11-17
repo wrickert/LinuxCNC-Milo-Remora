@@ -36,8 +36,12 @@ net spindle-reg-cmd  scale.0.out             => mb2hal.spindle-speed.00.float
 # spindle forward — coil 0049H is the Forward coil, and there is no reverse
 # wiring. If reverse is ever wanted it needs coil 004AH and a separate
 # transaction, not a sign change here.
+#
+# 🚪 spindle-run is DRIVEN in milo.hal (DOOR INTERLOCK) as spindle.0.on AND
+#    door shut. Don't net spindle.0.on straight to the VFD here again: HAL
+#    refuses a second writer, and the door would stop nothing.
 ##############################################################################
-net spindle-run      spindle.0.on            => mb2hal.spindle-run.00.bit
+net spindle-run      => mb2hal.spindle-run.00.bit
 
 ##############################################################################
 # ACTUAL SPEED  ->  at-speed

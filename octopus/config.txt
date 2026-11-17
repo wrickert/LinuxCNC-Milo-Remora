@@ -120,6 +120,15 @@
 		"Mode":				"Input",
 		"Data Bit":			4
 	},
+	{
+	"Thread": "Servo",
+	"Type": "Digital Pin",
+		"Comment":			"Door reed switch, STOP_7 (closed = door shut, to GND) -> remora.input.05",
+		"Pin":				"PG_15",
+		"Mode":				"Input",
+		"Data Bit":			5,
+		"Modifier":		"Pull Up"
+	},
 
 	{
 	"Thread": "Servo",

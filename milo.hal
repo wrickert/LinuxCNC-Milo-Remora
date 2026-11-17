@@ -59,6 +59,84 @@ net user-request-enable iocontrol.0.user-request-enable => remora.SPI-reset
 net remora-status       remora.SPI-status               => iocontrol.0.emc-enable-in
 
 ##############################################################################
+# 🚪 DOOR INTERLOCK — the enclosure door pauses the job (added 2026-11-17)
+#
+# Sensor: sealed magnetic reed door contact, CLOSED when the magnet is beside
+# it. Signal + GND on STOP_7 = PG_15 -> remora.input.05 (octopus/config.txt
+# Data Bit 5, internal pull-up). Header power pin unconnected.
+#   door shut -> contact closed -> input LOW  -> door-shut TRUE
+#   door open -> contact open   -> input HIGH -> door-open TRUE
+#   wire cut  -> same as open. A broken wire reads "door open" (fail-safe).
+# That is an NC loop. Alarm contacts: buy "NC". Bare reeds: "NO"/Form A is
+# the same part (labelled without the magnet). Meter it. NC catches a cut
+# wire, NOT a short: signal crushed onto GND reads "shut" forever.
+#
+#   VFD run   = spindle.0.on AND door-shut      (spindle-run -> spindle.hal)
+#   feed hold = door-open OR (spindle.0.on AND NOT spindle.0.at-speed)
+#   mist/air  = M7/M8 AND door-shut
+#
+# Door opens: motion.feed-inhibit stops program/MDI motion next cycle and the
+#   program PAUSES in place (not aborted); the VFD ramps the spindle down (the
+#   same path as M5, a couple of seconds, NOT instant); mist and air go off.
+# Door shuts: the spindle restarts if it was on, and motion holds until
+#   at-speed is TRUE again. at-speed (spindle.hal) compares commanded RPM with
+#   the VFD's reported frequency, so it is FALSE the moment the spindle is
+#   stopped: no timer, no restart race.
+# Side effect: rapids also wait while the spindle spins up after M3 or an S
+#   change, and feed stops if the VFD folds back frequency under overload.
+#
+# 🚨 Deliberately NOT in the hardware e-stop chain: dropping the contactor
+#    drops VM, which resets the TMC2209s to defaults (Reset Octopus + re-home)
+#    and aborts the program — on every door opening. See README-config.md.
+# 🚨 Convenience interlock, NOT a safety-rated guard. It works only while the
+#    Pi, Remora and the Modbus link are up. Don't reach in until the spindle
+#    has stopped.
+# ⚠️ Jogging is a separate path (motion.jog-inhibit) and should still work
+#    with the door open. VERIFY. Toolsetter probing (G38) waits for the door.
+# ⚠️ Until the switch is wired, PG_15 floats HIGH = "door open": the spindle
+#    won't start and nothing moves. Jumper STOP_7 signal to GND to run without
+#    it. If instead the door does NOTHING, the Octopus still has the old
+#    config.txt (bit 5 never sent, reads "shut") — copy the new one over.
+##############################################################################
+
+# Debounce both polarities together (20 ms at the 1 ms servo period), so
+# door-open and door-shut always change on the same cycle.
+loadrt debounce cfg=2
+addf debounce.0 servo-thread
+setp debounce.0.delay 20
+net door-open-raw  remora.input.05     => debounce.0.0.in
+net door-shut-raw  remora.input.05.not => debounce.0.1.in
+
+# ⚠️ HAL loads each component ONCE. Any later and2 / or2 / not (e.g. the
+#    contactor block below) must be ADDED to these names= lists, not loaded
+#    again with a second loadrt line.
+loadrt and2 names=door-spindle-gate,spindle-spinup,door-mist-gate,door-air-gate
+loadrt or2  names=door-feed-or
+loadrt not  names=spindle-not-at-speed
+addf door-spindle-gate    servo-thread
+addf spindle-not-at-speed servo-thread
+addf spindle-spinup       servo-thread
+addf door-feed-or         servo-thread
+addf door-mist-gate       servo-thread
+addf door-air-gate        servo-thread
+
+net door-open  debounce.0.0.out => door-feed-or.in0
+net door-shut  debounce.0.1.out => door-spindle-gate.in1 door-mist-gate.in1 door-air-gate.in1
+
+# VFD run gate. spindle.hal sends the spindle-run signal to the VFD.
+net spindle-on   spindle.0.on => door-spindle-gate.in0 spindle-spinup.in0
+net spindle-run  door-spindle-gate.out
+
+# Feed hold. spindle-at-speed is DRIVEN in spindle.hal (near.0.out); this only
+# reads it, which HAL allows before the writer is linked.
+net spindle-at-speed    => spindle-not-at-speed.in
+net spindle-off-speed   spindle-not-at-speed.out => spindle-spinup.in1
+net spindle-spinning-up spindle-spinup.out       => door-feed-or.in1
+net door-feed-hold      door-feed-or.out         => motion.feed-inhibit
+
+# Mist (M7) and air blast (M8) are gated in the MIST COOLANT section below.
+
+##############################################################################
 # 🚨 SAFETY LOOP GAP — LinuxCNC does not currently know the machine is dead
 #
 # Today emc-enable-in is driven by SPI-status ALONE. That covers "the link to
@@ -85,11 +163,12 @@ net remora-status       remora.SPI-status               => iocontrol.0.emc-enabl
 #    lock the machine in E-stop. Uncomment only once the aux contact is in.
 ##############################################################################
 
-# loadrt and2 count=1
-# addf and2.0 servo-thread
-# net estop-ok      remora.input.04.not => and2.0.in0
-# net remora-status remora.SPI-status   => and2.0.in1
-# net machine-ok    and2.0.out          => iocontrol.0.emc-enable-in
+# ⚠️ and2 is already loaded by DOOR INTERLOCK above. Add estop-gate to its
+#    'loadrt and2 names=' list (a second 'loadrt and2' line fails), then:
+# addf estop-gate servo-thread
+# net estop-ok      remora.input.04.not => estop-gate.in0
+# net remora-status remora.SPI-status   => estop-gate.in1
+# net machine-ok    estop-gate.out      => iocontrol.0.emc-enable-in
 #   ... and DELETE the direct 'net remora-status ... => iocontrol.0.emc-enable-in'
 #   line above when you do, or HAL will refuse two drivers on one signal.
 
@@ -243,8 +322,11 @@ net z-home  remora.input.02 => joint.2.home-sw-in
 # job exceeds the compressor's own spec. On M8 it only flows during cuts.
 ##############################################################################
 
-net coolant-mist  iocontrol.0.coolant-mist  => remora.output.00
-net coolant-flood iocontrol.0.coolant-flood => remora.output.01
+# Both pass through the DOOR INTERLOCK gates: nothing sprays out of an open door.
+net coolant-mist  iocontrol.0.coolant-mist  => door-mist-gate.in0
+net coolant-flood iocontrol.0.coolant-flood => door-air-gate.in0
+net mist-out      door-mist-gate.out        => remora.output.00
+net air-out       door-air-gate.out         => remora.output.01
 
 ##############################################################################
 # TOOLSETTER / TOUCH PROBE
